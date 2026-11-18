@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Cap Santé">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<title>Cap Santé</title>
+<style>
+:root{
+  --bg:#f4f6f5; --card:#fff; --ink:#1f2933; --muted:#5f6b76; --line:#e2e8e6;
+  --teal:#0f766e; --teal-l:#d9f0ec; --good:#15803d; --good-l:#dcfce7;
+  --bad:#b91c1c; --bad-l:#fee2e2; --warn:#b45309; --warn-l:#fef3c7;
+  --sucre:#c2410c; --chol:#7c3aed; --reins:#0369a1;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--teal);color:#fff;padding:calc(env(safe-area-inset-top) + 10px) 16px 10px}
+header h1{margin:0;font-size:20px}
+header p{margin:2px 0 0;font-size:14px;opacity:.85}
+main{padding:12px 12px calc(env(safe-area-inset-bottom) + 90px);max-width:640px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:5;display:flex;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;padding:9px 2px 8px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button span{font-size:22px;line-height:1}
+nav button.on{color:var(--teal);font-weight:600}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.card h2{margin:0 0 10px;font-size:18px}
+.card h3{margin:14px 0 6px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.datebar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.datebar button{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:22px}
+.datebar .d{font-weight:600;text-align:center;flex:1}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .lbl{flex:1}
+.row .lbl small{display:block;color:var(--muted);font-size:13px}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#fff;font-size:22px;line-height:1;color:var(--teal)}
+.stepper .v{min-width:44px;text-align:center;font-weight:700;font-size:18px}
+.quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.quick button,.chip{border:1px solid var(--teal);background:#fff;color:var(--teal);border-radius:20px;padding:6px 12px;font-size:15px}
+.chips{display:flex;gap:6px}
+.chip.on{background:var(--teal);color:#fff}
+.tog{width:52px;height:32px;border-radius:16px;border:0;background:#cfd8d6;position:relative;flex:none}
+.tog::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;transition:left .15s}
+.tog.on{background:var(--teal)}
+.tog.on::after{left:23px}
+.tog.neg.on{background:var(--bad)}
+.scores{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.score{border-radius:12px;padding:10px 6px;text-align:center;background:var(--bg)}
+.score b{display:block;font-size:26px}
+.score small{font-size:12px;color:var(--muted)}
+.verdict{display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:12px;margin-top:8px}
+.verdict.good{background:var(--good-l);color:#14532d}
+.verdict.bad{background:var(--bad-l);color:#7f1d1d}
+.verdict.flat{background:var(--warn-l);color:#78350f}
+.verdict .ic{font-size:24px;line-height:1}
+.bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:var(--teal)}
+.muted{color:var(--muted);font-size:14px}
+.btn{display:block;width:100%;padding:13px;border-radius:12px;border:0;background:var(--teal);color:#fff;font-size:17px;font-weight:600;margin-top:10px}
+.btn.sec{background:#fff;color:var(--teal);border:1px solid var(--teal)}
+.btn.danger{background:#fff;color:var(--bad);border:1px solid var(--bad)}
+label.f{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0}
+label.f input,label.f select{width:120px;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:17px;text-align:right;background:#fff}
+label.f input[type=date]{width:170px;text-align:left}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:right}
+th:first-child,td:first-child{text-align:left}
+.up{color:var(--good);font-weight:700}.down{color:var(--bad);font-weight:700}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:12px;height:4px;border-radius:2px;margin-right:4px;vertical-align:middle}
+#upd{display:none;position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 76px);z-index:10;background:#1f2933;color:#fff;border-radius:14px;padding:12px 14px;align-items:center;gap:10px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+#upd button{margin-left:auto;background:#fff;color:#1f2933;border:0;border-radius:10px;padding:8px 12px;font-weight:600;font-size:15px}
+.hidden{display:none}
+.tip{font-size:14px;background:var(--teal-l);border-radius:10px;padding:10px;margin-top:8px}
+</style>
+</head>
+<body>
+<header><h1>Cap Santé</h1><p id="sub">Sucre · Cholestérol · Reins</p></header>
+<main id="app"></main>
+<div id="upd">Nouvelle version disponible <button id="updBtn">Mettre à jour</button></div>
+<nav>
+  <button data-t="jour" class="on"><span>📝</span>Aujourd’hui</button>
+  <button data-t="bilan"><span>📈</span>Tendance</button>
+  <button data-t="analyses"><span>🩸</span>Analyses</button>
+  <button data-t="reglages"><span>⚙️</span>Réglages</button>
+</nav>
+<input type="file" id="fileIn" accept="application/json,.json" class="hidden">
+<script>
+/* ---------- Données ---------- */
+const AXES = {
+  sucre:{nom:"Sucre", long:"Glycémie / insuline (HOMA)", col:"var(--sucre)", hex:"#c2410c"},
+  chol:{nom:"Cholestérol", long:"LDL, HDL, triglycérides", col:"var(--chol)", hex:"#7c3aed"},
+  reins:{nom:"Reins", long:"Reins et tension (sel, eau)", col:"var(--reins)", hex:"#0369a1"}
+};
+const BASE = {sucre:50, chol:55, reins:60};
+
+// Ce qui aide
+const PLUS = [
+  {id:"poisson", l:"Poisson gras", s:"égoutté ou au naturel", e:{chol:10, sucre:3}},
+  {id:"legumes", l:"Légumes (2 portions ou plus)", e:{sucre:8, chol:5, reins:3}},
+  {id:"legumineuses", l:"Légumineuses", s:"lentilles, pois chiches, haricots", e:{sucre:6, chol:6}},
+  {id:"complet", l:"Pain / céréales complets", s:"au lieu des blancs", e:{sucre:6, chol:2}},
+  {id:"noix", l:"Poignée de fruits à coque", s:"noix, amandes, non salés", e:{chol:5}},
+  {id:"ptidej", l:"Petit-déjeuner salé / protéiné", s:"poisson, œufs, avocat… pas sucré", e:{sucre:5}},
+  {id:"eau", l:"Eau : 1,5 L ou plus", e:{reins:10}}
+];
+// Ce qui éloigne (compteurs). free = nombre « gratuit » avant pénalité
+const MOINS = [
+  {id:"sucres", l:"Sucre rapide", s:"soda, jus, confiture, dessert sucré", e:{sucre:-12, chol:-2}},
+  {id:"viennoiserie", l:"Viennoiserie, biscuit, gâteau", e:{sucre:-10, chol:-8}},
+  {id:"raffines", l:"Grosse portion de pain / riz / pâtes blancs", e:{sucre:-7}},
+  {id:"grignotage", l:"Grignotage entre les repas", e:{sucre:-6}},
+  {id:"huile", l:"Cuillère à soupe d’huile ajoutée", s:"2 par jour sans pénalité", free:2, e:{sucre:-4, chol:-2}},
+  {id:"fromage", l:"Portion de fromage", s:"1 par jour sans pénalité", free:1, e:{chol:-6, reins:-3}},
+  {id:"charcut", l:"Charcuterie / viande grasse", e:{chol:-10, reins:-6}},
+  {id:"beurre", l:"Beurre / crème", e:{chol:-7}},
+  {id:"sale", l:"Plat industriel, conserve salée, chips", e:{reins:-8}},
+  {id:"alcool", l:"Verre d’alcool", e:{sucre:-5, chol:-2, reins:-4}}
+];
+const AVOCAT = {0:{}, 0.5:{chol:3}, 1:{chol:2, sucre:-4}};
+const NEGTOG = [
+  {id:"bicarb", l:"Bicarbonate de soude", s:"très salé (sodium)", e:{reins:-12}},
+  {id:"ains", l:"Anti-inflammatoire", s:"ibuprofène, Advil, Nurofen…", e:{reins:-20}}
+];
+
+const LABS = [
+  {id:"ldl", l:"LDL-cholestérol", u:"g/l", bas:true, cible:()=>S.ldl, ct:()=>"< "+S.ldl.toFixed(2).replace(".",",")},
+  {id:"hdl", l:"HDL (bon cholestérol)", u:"g/l", bas:false, cible:()=>0.40, ct:()=>"> 0,40"},
+  {id:"tg", l:"Triglycérides", u:"g/l", bas:true, cible:()=>1.50, ct:()=>"< 1,50"},
+  {id:"gly", l:"Glycémie à jeun", u:"g/l", bas:true, cible:()=>1.10, ct:()=>"< 1,10"},
+  {id:"homa", l:"Indice HOMA", u:"", bas:true, cible:()=>2.4, ct:()=>"< 2,4"},
+  {id:"hba1c", l:"Hémoglobine glyquée", u:"%", bas:true, cible:()=>6.0, ct:()=>"< 6,0"},
+  {id:"dfg", l:"DFG (reins)", u:"ml/mn", bas:false, cible:()=>60, ct:()=>"> 60"},
+  {id:"poids", l:"Poids", u:"kg", bas:true, cible:()=>null, ct:()=>"—"},
+  {id:"taille", l:"Tour de taille", u:"cm", bas:true, cible:()=>94, ct:()=>"< 94"}
+];
+
+/* ---------- Stockage ---------- */
+const K = {days:"capsante.days", labs:"capsante.labs", set:"capsante.settings"};
+function load(k, def){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; }catch(e){ return def; } }
+function save(){ try{
+  localStorage.setItem(K.days, JSON.stringify(D));
+  localStorage.setItem(K.labs, JSON.stringify(L));
+  localStorage.setItem(K.set, JSON.stringify(S));
+}catch(e){ alert("Impossible d’enregistrer sur cet appareil."); } }
+let D = load(K.days, {});
+let L = load(K.labs, []);
+let S = Object.assign({ldl:1.00, actif:210}, load(K.set, {}));
+
+/* ---------- Outils ---------- */
+const pad = n => String(n).padStart(2,"0");
+const iso = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); };
+const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate()+n); return iso(d); };
+const today = () => iso(new Date());
+const fmt = (n, dec=2) => n==null||isNaN(n) ? "—" : (Math.round(n*10**dec)/10**dec).toLocaleString("fr-FR");
+const fmtDate = s => parse(s).toLocaleDateString("fr-FR", {weekday:"long", day:"numeric", month:"long"});
+const fmtShort = s => parse(s).toLocaleDateString("fr-FR", {day:"2-digit", month:"2-digit", year:"2-digit"});
+const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function blank(){ return {marche:0, piscine:0, autre:0, repas:[false,false,false], p:{}, m:{}, n:{}, avocat:0}; }
+function day(s){ return D[s] ? Object.assign(blank(), D[s]) : blank(); }
+function hasData(x){
+  if(!x) return false;
+  if(x.marche||x.piscine||x.autre||x.avocat) return true;
+  if((x.repas||[]).some(Boolean)) return true;
+  return [x.p,x.m,x.n].some(o => o && Object.values(o).some(Boolean));
+}
+
+/* ---------- Score ---------- */
+function contributions(x){
+  // renvoie une liste {cle, libellé, effets}
+  const out = [];
+  const w = x.marche + x.piscine*1.3 + x.autre;
+  const f = Math.min(w, 60)/60;
+  if(w>0) out.push({k:"activite", l:"Activité physique", e:{sucre:30*f, chol:12*f, reins:12*f}});
+  const nr = (x.repas||[]).filter(Boolean).length;
+  if(nr) out.push({k:"repas", l:"Marche après les repas", e:{sucre:4*nr}});
+  PLUS.forEach(it => { if(x.p[it.id]) out.push({k:it.id, l:it.l, e:it.e}); });
+  MOINS.forEach(it => {
+    const n = Math.max(0, (x.m[it.id]||0) - (it.free||0));
+    if(n){ const e = {}; for(const a in it.e) e[a] = it.e[a]*n; out.push({k:it.id, l:it.l, e}); }
+  });
+  NEGTOG.forEach(it => { if(x.n[it.id]) out.push({k:it.id, l:it.l, e:it.e}); });
+  if(x.avocat) out.push({k:"avocat", l:x.avocat===1?"Avocat entier":"Demi-avocat", e:AVOCAT[x.avocat]});
+  return out;
+}
+function score(x){
+  const r = Object.assign({}, BASE);
+  contributions(x).forEach(c => { for(const a in c.e) r[a] += c.e[a]; });
+  for(const a in r) r[a] = clamp(r[a]);
+  r.global = clamp((r.sucre + r.chol + r.reins)/3);
+  return r;
+}
+function avg(from, n){
+  // moyenne sur n jours se terminant à 'from' (inclus), jours renseignés seulement
+  const acc = {sucre:0, chol:0, reins:0, global:0}; let c = 0;
+  for(let i=0;i<n;i++){ const s = addDays(from, -i); if(hasData(D[s])){ const r = score(day(s)); for(const a in acc) acc[a]+=r[a]; c++; } }
+  if(!c) return null;
+  for(const a in acc) acc[a] = acc[a]/c;
+  acc.n = c; return acc;
+}
+
+/* ---------- Rendu ---------- */
+let tab = "jour", cur = today();
+const app = document.getElementById("app");
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); window.scrollTo(0,0); });
+
+function render(){
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.t===tab));
+  ({jour:rJour, bilan:rBilan, analyses:rAnalyses, reglages:rReglages})[tab]();
+}
+
+function stepper(path, v, step, unit=""){
+  return `<div class="stepper"><button data-step="${path}" data-d="${-step}">−</button><span class="v">${v}${unit}</span><button data-step="${path}" data-d="${step}">+</button></div>`;
+}
+function tog(path, on, neg=false){ return `<button class="tog ${neg?"neg":""} ${on?"on":""}" data-tog="${path}" aria-pressed="${on}"></button>`; }
+
+function rJour(){
+  const x = day(cur), r = score(x), filled = hasData(D[cur]);
+  const isToday = cur===today();
+  app.innerHTML = `
+  <div class="card datebar">
+    <button id="prev">‹</button>
+    <div class="d">${isToday?"Aujourd’hui":esc(fmtDate(cur))}<div class="muted">${isToday?esc(fmtDate(cur)):""}</div></div>
+    <button id="next" ${isToday?"disabled style='opacity:.3'":""}>›</button>
+  </div>
+
+  <div class="card">
+    <h2>Score du jour</h2>
+    ${filled ? `<div class="scores">${Object.keys(AXES).map(a=>`<div class="score"><b style="color:${AXES[a].col}">${r[a]}</b><small>${AXES[a].nom}</small></div>`).join("")}</div>
+    <p class="muted" style="margin:8px 0 0">Objectif : 70 ou plus sur chaque ligne. Score global : <b>${r.global}</b>/100</p>`
+    : `<p class="muted" style="margin:0">Renseignez votre activité et vos repas ci-dessous.</p>`}
+  </div>
+
+  <div class="card">
+    <h2>🚶 Activité</h2>
+    <div class="row"><div class="lbl">Marche</div>${stepper("marche", x.marche, 5, " min")}</div>
+    <div class="quick"><button data-add="marche" data-v="15">+15 min</button><button data-add="marche" data-v="30">+30 min</button></div>
+    <div class="row"><div class="lbl">Piscine</div>${stepper("piscine", x.piscine, 5, " min")}</div>
+    <div class="quick"><button data-add="piscine" data-v="30">+30 min</button><button data-add="piscine" data-v="45">+45 min</button></div>
+    <div class="row"><div class="lbl">Autre<small>vélo, jardinage, gym…</small></div>${stepper("autre", x.autre, 5, " min")}</div>
+    <h3>Marche de 10 min après le repas</h3>
+    <div class="chips">${["Matin","Midi","Soir"].map((t,i)=>`<button class="chip ${x.repas[i]?"on":""}" data-repas="${i}">${t}</button>`).join("")}</div>
+  </div>
+
+  <div class="card">
+    <h2>✅ Ce qui aide</h2>
+    ${PLUS.map(it=>`<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${tog("p."+it.id, !!x.p[it.id])}</div>`).join("")}
+    <div class="row"><div class="lbl">Avocat<small>un demi suffit</small></div>
+      <div class="chips">${[[0,"Non"],[0.5,"½"],[1,"Entier"]].map(([v,t])=>`<button class="chip ${x.avocat===v?"on":""}" data-avo="${v}">${t}</button>`).join("")}</div></div>
+  </div>
+
+  <div class="card">
+    <h2>⚠️ Ce qui éloigne</h2>
+    <p class="muted" style="margin:0 0 4px">Indiquez le nombre de fois dans la journée.</p>
+    ${MOINS.map(it=>`<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${stepper("m."+it.id, x.m[it.id]||0, 1)}</div>`).join("")}
+    ${NEGTOG.map(it=>`<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${tog("n."+it.id, !!x.n[it.id], true)}</div>`).join("")}
+  </div>
+  ${filled?`<div class="card"><h2>Ce qui a compté aujourd’hui</h2>${factorList(contributions(x))}</div>`:""}`;
+
+  document.getElementById("prev").onclick = () => { cur = addDays(cur,-1); render(); };
+  document.getElementById("next").onclick = () => { if(cur<today()){ cur = addDays(cur,1); render(); } };
+  bindDay();
+}
+
+function edit(fn){
+  const x = day(cur); fn(x);
+  if(hasData(x)) D[cur] = x; else delete D[cur];
+  save();
+  const y = window.scrollY; render(); window.scrollTo(0,y);
+}
+function bindDay(){
+  app.querySelectorAll("[data-step]").forEach(b => b.onclick = () => edit(x => {
+    const [a,k] = b.dataset.step.split("."); const d = Number(b.dataset.d);
+    if(k){ x[a][k] = Math.max(0, (x[a][k]||0)+d); } else { x[a] = Math.max(0, x[a]+d); }
+  }));
+  app.querySelectorAll("[data-add]").forEach(b => b.onclick = () => edit(x => { x[b.dataset.add] += Number(b.dataset.v); }));
+  app.querySelectorAll("[data-tog]").forEach(b => b.onclick = () => edit(x => { const [a,k] = b.dataset.tog.split("."); x[a][k] = !x[a][k]; }));
+  app.querySelectorAll("[data-repas]").forEach(b => b.onclick = () => edit(x => { const i = +b.dataset.repas; x.repas = x.repas.slice(); x.repas[i] = !x.repas[i]; }));
+  app.querySelectorAll("[data-avo]").forEach(b => b.onclick = () => edit(x => { x.avocat = Number(b.dataset.avo); }));
+}
+
+function factorList(list){
+  const tot = list.map(c => ({l:c.l, v:Object.values(c.e).reduce((s,v)=>s+v,0), e:c.e})).filter(c=>Math.abs(c.v)>=0.5);
+  const pos = tot.filter(c=>c.v>0).sort((a,b)=>b.v-a.v).slice(0,4);
+  const neg = tot.filter(c=>c.v<0).sort((a,b)=>a.v-b.v).slice(0,4);
+  const line = c => `<div class="row"><div class="lbl">${esc(c.l)}<small>${Object.keys(c.e).filter(a=>Math.round(c.e[a])).map(a=>AXES[a].nom+" "+(c.e[a]>0?"+":"")+Math.round(c.e[a])).join(" · ")}</small></div></div>`;
+  return (pos.length?`<h3 style="color:var(--good)">Vous rapproche</h3>${pos.map(line).join("")}`:"")
+       + (neg.length?`<h3 style="color:var(--bad)">Vous éloigne</h3>${neg.map(line).join("")}`:"")
+       || `<p class="muted">Rien de marquant.</p>`;
+}
+
+function verdict(now, before, label){
+  if(!now) return `<div class="verdict flat"><span class="ic">✍️</span><div>Pas encore de données cette semaine.</div></div>`;
+  if(!before) return `<div class="verdict flat"><span class="ic">⏳</span><div>Moyenne ${label} : <b>${Math.round(now)}</b>. Il faut une semaine de plus pour comparer.</div></div>`;
+  const d = now - before;
+  if(d > 3) return `<div class="verdict good"><span class="ic">↗️</span><div><b>Vous vous rapprochez de l’objectif</b><br>${Math.round(before)} → ${Math.round(now)} par rapport à la semaine d’avant.</div></div>`;
+  if(d < -3) return `<div class="verdict bad"><span class="ic">↘️</span><div><b>Vous vous éloignez de l’objectif</b><br>${Math.round(before)} → ${Math.round(now)} par rapport à la semaine d’avant.</div></div>`;
+  return `<div class="verdict flat"><span class="ic">➡️</span><div><b>Stable</b><br>${Math.round(before)} → ${Math.round(now)} par rapport à la semaine d’avant.</div></div>`;
+}
+
+function rBilan(){
+  const t = today(), a = avg(t,7), b = avg(addDays(t,-7),7);
+  let min = 0, marche = 0, piscine = 0, repas = 0; const agg = {};
+  for(let i=0;i<7;i++){ const s = addDays(t,-i); if(!D[s]) continue; const x = day(s);
+    min += x.marche+x.piscine+x.autre; marche += x.marche; piscine += x.piscine; repas += x.repas.filter(Boolean).length;
+    contributions(x).forEach(c => { if(!agg[c.k]) agg[c.k] = {l:c.l.replace(/^Demi-avocat|^Avocat entier/,"Avocat"), e:{}}; for(const k in c.e) agg[c.k].e[k] = (agg[c.k].e[k]||0)+c.e[k]; });
+  }
+  const pct = Math.min(100, Math.round(min/S.actif*100));
+  app.innerHTML = `
+  <div class="card">
+    <h2>Les 7 derniers jours</h2>
+    ${verdict(a&&a.global, b&&b.global, "globale")}
+    ${a?`<div class="scores" style="margin-top:10px">${Object.keys(AXES).map(k=>{
+        const d = b ? a[k]-b[k] : 0;
+        const ar = !b ? "" : d>3 ? `<span class="up"> ↗</span>` : d<-3 ? `<span class="down"> ↘</span>` : " →";
+        return `<div class="score"><b style="color:${AXES[k].col}">${Math.round(a[k])}${ar}</b><small>${AXES[k].nom}</small></div>`;}).join("")}</div>
+      <p class="muted" style="margin:8px 0 0">${a.n} jour${a.n>1?"s":""} renseigné${a.n>1?"s":""} sur 7. Objectif : 70 ou plus.</p>`:""}
+  </div>
+
+  <div class="card">
+    <h2>🚶 Activité de la semaine</h2>
+    <div style="display:flex;justify-content:space-between"><b>${min} min</b><span class="muted">objectif ${S.actif} min</span></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <p class="muted" style="margin:4px 0 0">Marche ${marche} min · Piscine ${piscine} min · ${repas} marche${repas>1?"s":""} après repas</p>
+  </div>
+
+  <div class="card">
+    <h2>Évolution sur 30 jours</h2>
+    ${chart()}
+    <div class="legend">${Object.keys(AXES).map(k=>`<span><i style="background:${AXES[k].hex}"></i>${AXES[k].nom}</span>`).join("")}<span><i style="background:#94a3b8"></i>Objectif 70</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Ce qui a le plus compté</h2>
+    ${Object.keys(agg).length ? factorList(Object.values(agg)) : `<p class="muted">Pas encore de données.</p>`}
+  </div>
+
+  <div class="tip">Ce score mesure vos <b>habitudes</b>, pas votre sang. Seule la prise de sang dit si le cholestérol ou le sucre ont vraiment bougé : voir l’onglet Analyses.</div>`;
+}
+
+function chart(){
+  const W = 340, H = 170, P = {l:28, r:8, t:8, b:22};
+  const t = today(), pts = {sucre:[], chol:[], reins:[]};
+  for(let i=29;i>=0;i--){ const s = addDays(t,-i); const x = 29-i;
+    if(hasData(D[s])){ const r = score(day(s)); for(const k in pts) pts[k].push([x, r[k]]); } }
+  const X = i => P.l + i*(W-P.l-P.r)/29, Y = v => P.t + (100-v)*(H-P.t-P.b)/100;
+  if(!pts.sucre.length) return `<p class="muted">Pas encore de données.</p>`;
+  let g = "";
+  [0,50,100].forEach(v => g += `<line x1="${P.l}" x2="${W-P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e2e8e6"/><text x="${P.l-5}" y="${Y(v)+4}" font-size="10" text-anchor="end" fill="#5f6b76">${v}</text>`);
+  g += `<line x1="${P.l}" x2="${W-P.r}" y1="${Y(70)}" y2="${Y(70)}" stroke="#94a3b8" stroke-dasharray="4 3"/>`;
+  [[0,addDays(t,-29)],[29,t]].forEach(([i,s],j)=> g += `<text x="${X(i)}" y="${H-6}" font-size="10" fill="#5f6b76" text-anchor="${j?"end":"start"}">${parse(s).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</text>`);
+  for(const k in pts){
+    const p = pts[k]; if(!p.length) continue;
+    g += `<polyline fill="none" stroke="${AXES[k].hex}" stroke-width="2" stroke-linejoin="round" points="${p.map(([x,v])=>X(x)+","+Y(v)).join(" ")}"/>`;
+    p.forEach(([x,v]) => g += `<circle cx="${X(x)}" cy="${Y(v)}" r="2.5" fill="${AXES[k].hex}"/>`);
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Scores des 30 derniers jours">${g}</svg>`;
+}
+
+let labForm = false;
+function rAnalyses(){
+  const sorted = L.slice().sort((a,b)=>a.date<b.date?-1:1);
+  const last = sorted[sorted.length-1];
+  const next = last ? addDays(last.date, 90) : null;
+  const rows = LABS.map(m => {
+    const vals = sorted.filter(e => e[m.id]!=null && e[m.id]!=="");
+    if(!vals.length) return "";
+    const v = vals[vals.length-1][m.id], p = vals.length>1 ? vals[vals.length-2][m.id] : null;
+    const c = m.cible();
+    let ok = "";
+    if(c!=null) ok = (m.bas ? v < c : v > c) ? "✅" : "⚠️";
+    let tr = "";
+    if(p!=null && v!==p){ const better = m.bas ? v<p : v>p; tr = `<span class="${better?"up":"down"}">${better?"mieux":"moins bien"}</span>`; }
+    return `<tr><td>${m.l}<div class="muted">${p!=null?fmt(p)+" → ":""}<b>${fmt(v)}</b> ${m.u}</div></td><td>${m.ct()} ${ok}</td><td>${tr}</td></tr>`;
+  }).join("");
+  app.innerHTML = `
+  <div class="card">
+    <h2>🩸 Mes résultats</h2>
+    ${rows ? `<table><tr><th>Marqueur</th><th>Objectif</th><th>Évolution</th></tr>${rows}</table>
+      <p class="muted">Dernier bilan : ${fmtShort(last.date)}. Prochain bilan conseillé vers le <b>${fmtShort(next)}</b> (environ 3 mois), sur prescription du médecin.</p>`
+    : `<p class="muted">Aucun résultat enregistré. Ajoutez votre dernière prise de sang, ou importez le fichier de vos analyses depuis Réglages.</p>`}
+    <button class="btn" id="addLab">${labForm?"Annuler":"Ajouter une prise de sang"}</button>
+  </div>
+  ${labForm ? `<div class="card" id="lf">
+    <h2>Nouvelle prise de sang</h2>
+    <label class="f">Date <input type="date" id="ld" value="${today()}"></label>
+    ${LABS.map(m=>`<label class="f">${m.l}${m.u?` (${m.u})`:""} <input type="number" inputmode="decimal" step="any" data-lab="${m.id}"></label>`).join("")}
+    <p class="muted">Laissez vide ce qui n’a pas été mesuré.</p>
+    <button class="btn" id="saveLab">Enregistrer</button>
+  </div>` : ""}
+  ${sorted.length ? `<div class="card"><h2>Historique</h2>
+    ${sorted.slice().reverse().map((e,i)=>`<div class="row"><div class="lbl"><b>${fmtShort(e.date)}</b><small>${LABS.filter(m=>e[m.id]!=null&&e[m.id]!=="").map(m=>m.l.split(" ")[0]+" "+fmt(e[m.id])).join(" · ")}</small></div><button class="chip" data-del="${esc(e.date)}">Suppr.</button></div>`).join("")}
+  </div>` : ""}`;
+  document.getElementById("addLab").onclick = () => { labForm = !labForm; render(); };
+  if(labForm) document.getElementById("saveLab").onclick = () => {
+    const e = {date: document.getElementById("ld").value || today()};
+    app.querySelectorAll("[data-lab]").forEach(i => { const v = i.value.replace(",","."); if(v!=="" && !isNaN(+v)) e[i.dataset.lab] = +v; });
+    if(Object.keys(e).length<2){ alert("Saisissez au moins une valeur."); return; }
+    L = L.filter(x => x.date!==e.date).concat([e]); save(); labForm = false; render();
+  };
+  app.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
+    if(confirm("Supprimer la prise de sang du "+fmtShort(b.dataset.del)+" ?")){ L = L.filter(x=>x.date!==b.dataset.del); save(); render(); }
+  });
+}
+
+function rReglages(){
+  app.innerHTML = `
+  <div class="card">
+    <h2>Objectifs</h2>
+    <label class="f">Objectif LDL (g/l)
+      <select id="sldl">${[[1.16,"< 1,16 (faible)"],[1.00,"< 1,00 (modéré)"],[0.70,"< 0,70 (élevé)"],[0.55,"< 0,55 (très élevé)"]].map(([v,t])=>`<option value="${v}" ${S.ldl===v?"selected":""}>${t}</option>`).join("")}</select></label>
+    <p class="muted" style="margin:0">À confirmer avec votre médecin selon votre risque cardiovasculaire.</p>
+    <label class="f">Activité par semaine (min) <input type="number" inputmode="numeric" id="sact" value="${S.actif}"></label>
+  </div>
+  <div class="card">
+    <h2>Sauvegarde</h2>
+    <p class="muted" style="margin:0">Vos données restent uniquement sur ce téléphone. Exportez-les de temps en temps.</p>
+    <button class="btn" id="exp">Exporter mes données</button>
+    <button class="btn sec" id="imp">Importer un fichier</button>
+    <button class="btn danger" id="rst">Tout effacer</button>
+  </div>
+  <div class="card">
+    <h2>Comment est calculé le score ?</h2>
+    <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Sucre, Cholestérol et Reins. L’activité compte surtout pour le sucre ; les graisses animales pour le cholestérol ; le sel, l’eau, le bicarbonate et les anti-inflammatoires pour les reins.</p>
+    <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin ou de l’infirmière Asalée.</p>
+    <p class="muted">Version 1</p>
+  </div>`;
+  document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
+  document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
+  document.getElementById("exp").onclick = exporter;
+  document.getElementById("imp").onclick = () => document.getElementById("fileIn").click();
+  document.getElementById("rst").onclick = () => { if(confirm("Effacer toutes les données de l’application ?") && confirm("Vraiment tout effacer ?")){ D = {}; L = []; save(); render(); } };
+}
+
+async function exporter(){
+  const data = JSON.stringify({app:"capsante", version:1, days:D, labs:L, settings:S}, null, 1);
+  const name = "cap-sante-"+today()+".json";
+  const file = new File([data], name, {type:"application/json"});
+  try{
+    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:name}); return; }
+  }catch(e){ if(e.name==="AbortError") return; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+document.getElementById("fileIn").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const j = JSON.parse(r.result); let n = 0;
+      if(j.days && typeof j.days==="object"){ Object.assign(D, j.days); n++; }
+      if(Array.isArray(j.labs)){ j.labs.forEach(e => { if(e && e.date){ L = L.filter(x=>x.date!==e.date).concat([e]); } }); n++; }
+      if(j.settings && typeof j.settings==="object"){ Object.assign(S, j.settings); n++; }
+      if(!n) throw 0;
+      save(); alert("Import réussi."); render();
+    }catch(err){ alert("Ce fichier n’est pas reconnu."); }
+    e.target.value = "";
+  };
+  r.readAsText(f);
+};
+
+render();
+
+/* ---------- Mises à jour (service worker) ---------- */
+if("serviceWorker" in navigator){
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if(!reloading){ reloading = true; location.reload(); } });
+  navigator.serviceWorker.register("/sw.js").then(reg => {
+    const show = w => { const u = document.getElementById("upd"); u.style.display = "flex"; document.getElementById("updBtn").onclick = () => w.postMessage("SKIP_WAITING"); };
+    if(reg.waiting && navigator.serviceWorker.controller) show(reg.waiting);
+    reg.addEventListener("updatefound", () => {
+      const w = reg.installing;
+      w.addEventListener("statechange", () => { if(w.state==="installed" && navigator.serviceWorker.controller) show(w); });
+    });
+    document.addEventListener("visibilitychange", () => { if(document.visibilityState==="visible") reg.update(); });
+  }).catch(()=>{});
+}
+document.addEventListener("visibilitychange", () => { if(document.visibilityState==="visible" && tab==="jour" && cur!==today() && !D[cur]) { cur = today(); render(); } });
+</script>
+</body>
+</html>
