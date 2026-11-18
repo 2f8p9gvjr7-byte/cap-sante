@@ -151,8 +151,24 @@ const FOODS_RAW = [
  ["thon_h","Thon à l’huile (égoutté)","Poissons",190,27,0,0,0,9,1.5,0.9,[["1 boîte",120]],{}],
  ["saumon","Saumon cuit","Poissons",200,22,0,0,0,12,2.3,0.15,[["1 pavé",125]],{o3:1}],
  ["saum_f","Saumon fumé","Poissons",180,22,0,0,0,10,2,3,[["1 tranche",30],["2 tranches",60]],{o3:1}],
- ["cabil","Cabillaud / colin cuit","Poissons",90,20,0,0,0,1,0.2,0.3,[["1 filet",150]],{}],
+ ["cabil","Poisson blanc cuit (cabillaud, colin, merlu, lieu, merlan, sole, dorade, bar)","Poissons",90,20,0,0,0,1,0.2,0.3,[["1 filet",150]],{}],
  ["crev","Crevettes cuites","Poissons",95,21,0,0,0,1.2,0.3,1.5,[["1 portion",100]],{}],
+ ["sard_f","Sardines fraîches grillées","Poissons",180,22,0,0,0,10,3,0.3,[["4 sardines",120]],{o3:1}],
+ ["truite","Truite cuite","Poissons",160,22,0,0,0,8,1.8,0.1,[["1 filet",120]],{o3:1}],
+ ["thon_f","Thon frais cuit","Poissons",140,30,0,0,0,2,0.5,0.1,[["1 steak",130]],{}],
+ ["hareng","Hareng fumé ou mariné","Poissons",220,18,2,1,0,16,3.5,3.5,[["1 filet",60]],{o3:1}],
+ ["anchois","Anchois à l’huile","Poissons",200,25,0,0,0,11,2.5,9,[["5 filets",15]],{o3:1}],
+ ["moules","Moules (chair cuite)","Poissons",100,18,3,0,0,2.5,0.5,0.9,[["1 portion",200]],{}],
+ ["p_pane","Poisson pané (cuit au four)","Poissons",200,13,16,1,1,9,1.2,0.8,[["1 pavé",100],["2 pavés",200]],{ig:0.5}],
+ ["p_pane_f","Poisson pané frit","Poissons",240,13,16,1,1,14,2,0.8,[["1 pavé",100],["2 pavés",200]],{ig:0.5}],
+ ["croq_p","Croquettes / beignets de poisson","Poissons",220,11,18,1.5,1,11,1.5,1,[["4 croquettes",100]],{ig:0.5}],
+ ["calam","Calamars frits (à la romaine)","Poissons",230,13,15,0.5,0.8,13,1.5,0.9,[["1 portion",100]],{ig:0.5}],
+ ["p_sauce","Poisson en sauce (plat cuisiné)","Poissons",110,11,4,1.5,0.5,5,2,0.9,[["1 portion",200]],{}],
+ ["brandade","Brandade de morue","Poissons",160,9,10,1,1,9,3,1.1,[["1 portion",250]],{ig:0.5}],
+ ["surimi","Surimi","Poissons",110,8,14,5,0,2,0.3,1.8,[["4 bâtonnets",60]],{ig:0.5}],
+ ["rillettes_p","Rillettes de thon ou de saumon","Poissons",250,14,2,1,0,21,4,1.2,[["2 c. à soupe",40]],{}],
+ ["tarama","Tarama","Poissons",500,7,7,2,0,50,4,1.6,[["2 c. à soupe",30]],{}],
+ ["sushi","Sushis / makis","Poissons",150,6,28,5,0.5,1.5,0.3,1,[["6 pièces",150],["12 pièces",300]],{ig:1}],
  // Œufs
  ["oeuf","Œuf","Œufs",140,12.5,0.5,0.5,0,10,2.8,0.35,[["1 œuf",50],["2 œufs",100],["3 œufs",150]],{}],
  // Viandes
@@ -238,10 +254,30 @@ const FOODS_RAW = [
  ["yaourt","Yaourt nature","Produits laitiers",55,4.2,5,5,0,1.8,1.1,0.1,[["1 pot",125]],{}],
  ["yaourt_s","Yaourt aux fruits / sucré","Produits laitiers",95,3.5,14,13,0.3,2.7,1.8,0.1,[["1 pot",125]],{}],
  ["fblanc","Fromage blanc","Produits laitiers",75,7,4,4,0,3,2,0.1,[["1 portion",100]],{}],
+ ["y_chevre","Yaourt de chèvre nature","Produits laitiers",70,3.5,4,4,0,4,2.8,0.1,[["1 pot",125]],{}],
+ ["y_brebis","Yaourt de brebis nature","Produits laitiers",95,5,5,5,0,6,4,0.1,[["1 pot",125]],{}],
+ ["y_0","Yaourt nature 0 %","Produits laitiers",45,4.5,6,6,0,0.1,0.1,0.1,[["1 pot",125]],{}],
+ ["y_grec","Yaourt grec / à la grecque","Produits laitiers",120,4.5,4,4,0,10,6.5,0.1,[["1 pot",125],["1 grand pot (portion)",150]],{}],
+ ["skyr","Skyr nature","Produits laitiers",60,10,4,4,0,0.2,0.1,0.1,[["1 pot",150]],{}],
+ ["ribot","Lait ribot / lben (lait fermenté)","Produits laitiers",38,3,4,4,0,0.8,0.5,0.1,[["1 verre",200],["1 bol",250]],{}],
+ ["kefir","Kéfir de lait","Produits laitiers",55,3.3,4.5,4.5,0,2.5,1.6,0.1,[["1 verre",200]],{}],
+ ["faisselle","Faisselle","Produits laitiers",85,6.5,4,4,0,4.5,3,0.05,[["1 pot",100]],{}],
+ ["psuisse","Petit-suisse nature","Produits laitiers",135,9,3.5,3.5,0,9.5,6.5,0.05,[["1 petit-suisse",30],["2 petits-suisses",60]],{}],
+ ["lait_e","Lait entier","Produits laitiers",65,3.2,4.7,4.7,0,3.6,2.3,0.1,[["1 bol",250],["1 verre",200]],{}],
+ ["lait_0","Lait écrémé","Produits laitiers",34,3.4,5,5,0,0.1,0.1,0.1,[["1 bol",250],["1 verre",200]],{}],
+ ["creme_d","Crème dessert","Produits laitiers",120,3,18,15,0.3,3.5,2.3,0.15,[["1 pot",125]],{ig:1}],
+ ["riz_lait","Riz au lait","Produits laitiers",120,3,20,12,0.3,3,2,0.1,[["1 pot",125]],{ig:1}],
  ["camembert","Camembert, brie","Fromages",270,20,0.5,0.5,0,21,14,1.4,[["1 portion",30]],{}],
  ["comte","Comté, gruyère","Fromages",410,28,0,0,0,33,21,0.9,[["1 portion",30]],{}],
  ["emmental","Emmental râpé","Fromages",380,28,0,0,0,29,19,0.7,[["1 poignée",20]],{}],
  ["chevre","Fromage de chèvre","Fromages",300,18,1,1,0,25,17,1.3,[["1 portion",30]],{}],
+ ["chevre_f","Chèvre frais (en pot ou bûchette)","Fromages",220,10,3,3,0,19,13,0.9,[["1 portion",30],["2 c. à soupe",40]],{}],
+ ["bleu","Roquefort, bleu","Fromages",360,21,0,0,0,31,20,3.2,[["1 portion",30]],{}],
+ ["feta","Feta","Fromages",270,15,1,1,0,22,15,2.5,[["1 portion",30]],{}],
+ ["mozza","Mozzarella","Fromages",250,18,1,1,0,19,13,0.6,[["½ boule",60],["1 boule",125]],{}],
+ ["parmesan","Parmesan","Fromages",400,33,0,0,0,29,19,1.6,[["1 c. à soupe râpé",10]],{}],
+ ["ricotta","Ricotta","Fromages",150,9,3,3,0,11,7,0.3,[["1 portion",60]],{}],
+ ["ffrais","Fromage frais à tartiner (type Saint Môret)","Fromages",220,7,3,3,0,20,14,0.8,[["1 portion",30]],{}],
  ["vqr","Fromage fondu en portion","Fromages",240,10,6,6,0,19,13,2,[["1 portion",17]],{}],
  // Matières grasses et sauces
  ["huile_o","Huile d’olive","Matières grasses",900,0,0,0,0,100,14,0,[["1 c. à café",5],["1 c. à soupe",10]],{}],
@@ -893,7 +929,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Sucre, Cholestérol et Reins. L’activité compte surtout pour le sucre ; les graisses animales pour le cholestérol ; le sel, l’eau, le bicarbonate et les anti-inflammatoires pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres, graisses saturées, sel, fibres et poisson gras. Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 11</p>
+    <p class="muted">Version 13</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
