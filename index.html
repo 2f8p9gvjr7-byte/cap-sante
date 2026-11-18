@@ -847,7 +847,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Sucre, Cholestérol et Reins. L’activité compte surtout pour le sucre ; les graisses animales pour le cholestérol ; le sel, l’eau, le bicarbonate et les anti-inflammatoires pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin ou de l’infirmière Asalée.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres, graisses saturées, sel, fibres et poisson gras. Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 5</p>
+    <p class="muted">Version 6</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
@@ -891,7 +891,16 @@ if("serviceWorker" in navigator){
   let reloading = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => { if(!reloading){ reloading = true; location.reload(); } });
   navigator.serviceWorker.register("/sw.js").then(reg => {
-    const show = w => { const u = document.getElementById("upd"); u.style.display = "flex"; document.getElementById("updBtn").onclick = () => w.postMessage("SKIP_WAITING"); };
+    const show = w => {
+      const u = document.getElementById("upd"), btn = document.getElementById("updBtn");
+      u.style.display = "flex"; btn.disabled = false; btn.textContent = "Mettre à jour";
+      btn.onclick = () => {
+        btn.disabled = true; btn.textContent = "Mise à jour…";
+        const target = reg.waiting || w;            // toujours la version la plus récente
+        try{ if(target) target.postMessage("SKIP_WAITING"); }catch(e){}
+        setTimeout(() => { if(!reloading){ reloading = true; location.reload(); } }, 1500);  // filet de sécurité
+      };
+    };
     if(reg.waiting && navigator.serviceWorker.controller) show(reg.waiting);
     reg.addEventListener("updatefound", () => {
       const w = reg.installing;
