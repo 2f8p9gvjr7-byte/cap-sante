@@ -173,7 +173,16 @@ const FOODS_RAW = [
  // Légumes
  ["tomate","Tomate","Légumes",20,0.9,3,2.6,1.2,0.2,0,0,[["1 tomate",120]],{}],
  ["salade","Salade verte","Légumes",15,1.3,1.5,1,1.5,0.2,0,0,[["1 bol",50]],{}],
- ["carotte","Carottes","Légumes",30,0.7,5,4,2.5,0.2,0,0.1,[["1 portion",150]],{}],
+ ["carotte","Carotte","Légumes",30,0.7,6,5,2.5,0.2,0,0.1,[["1 carotte",80],["1 portion râpée",100],["1 portion cuite",150]],{}],
+ ["endive","Endive","Légumes",17,1,2.5,1,2,0.1,0,0.02,[["1 endive",120],["½ endive",60]],{}],
+ ["radis","Radis","Légumes",15,0.8,2,1.8,1.5,0.1,0,0.1,[["6 radis",60]],{}],
+ ["betterave","Betterave cuite","Légumes",45,1.5,8,7,2.5,0.1,0,0.2,[["1 portion",100]],{}],
+ ["chou","Chou (blanc, rouge)","Légumes",25,1.3,4,3.5,2.5,0.2,0,0,[["1 portion",100]],{}],
+ ["oignon","Oignon","Légumes",35,1.2,7,5,1.5,0.2,0,0,[["½ oignon",50]],{}],
+ ["poireau","Poireaux","Légumes",25,1.3,3.5,2,3,0.3,0,0,[["1 portion",150]],{}],
+ ["aubergine","Aubergine","Légumes",20,1,3,2.5,2.5,0.2,0,0,[["1 portion",150]],{}],
+ ["ppois","Petits pois","Légumes",75,5,9,3,6,0.4,0.1,0,[["1 portion",150]],{}],
+ ["mais","Maïs","Légumes",110,3,19,4,2.5,1.5,0.2,0.4,[["2 c. à soupe",40]],{ig:1}],
  ["hvert","Haricots verts","Légumes",30,2,4,1.5,3,0.2,0,0,[["1 portion",150]],{}],
  ["courg","Courgettes","Légumes",18,1,2,1.5,1.3,0.3,0,0,[["1 portion",150]],{}],
  ["brocoli","Brocoli","Légumes",30,2.5,3,1.5,2.5,0.4,0.1,0,[["1 portion",150]],{}],
@@ -263,6 +272,7 @@ const FOODS_RAW = [
  ["soda","Soda","Boissons",42,0,10.5,10.5,0,0,0,0.02,[["1 canette",330],["1 verre",200]],{ig:1}],
  ["soda0","Soda zéro","Boissons",1,0,0,0,0,0,0,0.02,[["1 canette",330]],{}],
  ["the_m","Thé à la menthe sucré","Boissons",35,0,9,9,0,0,0,0,[["1 verre",150]],{ig:1}],
+ ["expresso","Expresso sans sucre","Boissons",2,0.1,0,0,0,0.2,0.1,0,[["1 expresso",40],["1 double",80]],{}],
  ["cafe","Café / thé sans sucre","Boissons",1,0.1,0,0,0,0,0,0,[["1 tasse",150]],{}],
  ["vin","Vin","Boissons",85,0.1,0.2,0.2,0,0,0,0,[["1 verre",125]],{alc:125}],
  ["biere","Bière","Boissons",42,0.4,3.5,0.3,0,0,0,0,[["1 demi",250]],{alc:250}],
@@ -543,6 +553,11 @@ function nutBar(label, v, lim, unit, dec=0, goodIfAbove=false){
   const over = goodIfAbove ? false : v>lim;
   return `<span>${label}</span><span><b>${fmt(v,dec)}</b> / ${goodIfAbove?"":"max "}${fmt(lim,0)} ${unit}</span><div class="bar ${over?"over":""}"><i style="width:${pct}%${goodIfAbove?";background:var(--good)":""}"></i></div>`;
 }
+function lastMeal(m){
+  for(let i=1;i<=14;i++){ const s = addDays(cur,-i); const d = D[s];
+    if(d && d.j && d.j[m] && d.j[m].length) return {items:d.j[m], lbl: i===1 ? "d’hier" : "de "+parse(s).toLocaleDateString("fr-FR",{weekday:"long", day:"numeric"})}; }
+  return null;
+}
 function rRepas(){
   const x = day(cur), t = totals(x);
   app.innerHTML = `
@@ -563,11 +578,13 @@ function rRepas(){
     return `<div class="card meal"><h2>${label}<small>${items.length?Math.round(mt.kcal)+" kcal":""}</small></h2>
       ${items.map((it,i) => { const f = FOODS[it.f]; if(!f) return ""; const n = nutr(f,it.g);
         return `<button class="item" data-edit="${m}:${i}"><span>${esc(f.n)}<small>${Math.round(it.g)} g · sucres ${fmt(n.suc,0)} g · sel ${fmt(n.sel,1)} g</small></span><span class="k">${Math.round(n.kcal)} kcal</span></button>`; }).join("")}
-      <button class="add" data-addm="${m}">+ Ajouter un aliment</button></div>`;
+      <button class="add" data-addm="${m}">+ Ajouter un aliment</button>
+      ${!items.length && lastMeal(m) ? `<button class="add" style="background:#fff" data-copym="${m}">↺ Reprendre celui ${esc(lastMeal(m).lbl)}</button>` : ""}</div>`;
   }).join("")}
   <p class="muted">Valeurs moyennes approximatives, d’après les tables de composition françaises. Touchez un aliment pour changer la quantité ou le supprimer.</p>`;
   bindDateBar();
   app.querySelectorAll("[data-addm]").forEach(b => b.onclick = () => openSearch(b.dataset.addm));
+  app.querySelectorAll("[data-copym]").forEach(b => b.onclick = () => { const m = b.dataset.copym, lm = lastMeal(m); if(lm){ editJ(x => { x.j[m] = JSON.parse(JSON.stringify(lm.items)); }); render(); } });
   app.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { const [m,i] = b.dataset.edit.split(":"); const it = day(cur).j[m][+i]; openQty(m, it.f, it.g, +i); });
 }
 
@@ -830,7 +847,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Sucre, Cholestérol et Reins. L’activité compte surtout pour le sucre ; les graisses animales pour le cholestérol ; le sel, l’eau, le bicarbonate et les anti-inflammatoires pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin ou de l’infirmière Asalée.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres, graisses saturées, sel, fibres et poisson gras. Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 4</p>
+    <p class="muted">Version 5</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
