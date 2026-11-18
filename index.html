@@ -132,7 +132,6 @@ const PLUS = [
 ];
 // Toujours comptés (même avec le journal des repas)
 const AUTRES = [
-  {p:"p.eau", l:"Eau : 1,5 L ou plus", e:{reins:10}, neg:false},
   {p:"n.bicarb", l:"Bicarbonate de soude", s:"très salé (sodium)", e:{reins:-12}, neg:true},
   {p:"n.ains", l:"Anti-inflammatoire", s:"ibuprofène, Advil, Nurofen…", e:{reins:-20}, neg:true}
 ];
@@ -302,18 +301,32 @@ const MOINS = [
   {id:"sale", l:"Plat industriel, conserve salée, chips", e:{reins:-8}},
   {id:"alcool", l:"Verre d’alcool", e:{sucre:-5, chol:-2, reins:-4}}
 ];
+/* Eau : millilitres bus dans la journée, comparés à l'objectif personnel */
+const EAU_MAX = 1500;   // au-delà, plus de bonus
+function eauMl(x){
+  if(x.eauMl!=null) return x.eauMl;
+  if(x.eauNiv) return {1:700, 2:1250, 3:1500}[x.eauNiv];   // anciennes saisies
+  if(x.p && x.p.eau) return 1500;
+  return 0;
+}
+function eauEffet(ml){
+  const obj = S.eau;
+  if(ml < obj) return -10*(1 - ml/obj);                       // sous l'objectif : jusqu'à −10
+  const plafond = Math.max(EAU_MAX, obj);
+  return 5 + (plafond>obj ? 5*Math.min((ml-obj)/(plafond-obj), 1) : 5);  // objectif : +5, jusqu'à +10 à 1,5 L
+}
 const AVOCAT = {0:{}, 0.5:{chol:3}, 1:{chol:2, sucre:-4}};
 
 const LABS = [
   {id:"ldl", l:"LDL-cholestérol", u:"g/l", bas:true, cible:()=>S.ldl, ct:()=>"< "+S.ldl.toFixed(2).replace(".",",")},
-  {id:"hdl", l:"HDL (bon cholestérol)", u:"g/l", bas:false, cible:()=>0.40, ct:()=>"> 0,40"},
+  {id:"hdl", l:"HDL (bon cholestérol)", u:"g/l", bas:false, cible:()=>S.sexe==="F"?0.50:0.40, ct:()=>S.sexe==="F"?"> 0,50":"> 0,40"},
   {id:"tg", l:"Triglycérides", u:"g/l", bas:true, cible:()=>1.50, ct:()=>"< 1,50"},
   {id:"gly", l:"Glycémie à jeun", u:"g/l", bas:true, cible:()=>1.10, ct:()=>"< 1,10"},
   {id:"homa", l:"Indice HOMA", u:"", bas:true, cible:()=>2.4, ct:()=>"< 2,4"},
   {id:"hba1c", l:"Hémoglobine glyquée", u:"%", bas:true, cible:()=>6.0, ct:()=>"< 6,0"},
   {id:"dfg", l:"DFG (reins)", u:"ml/mn", bas:false, cible:()=>60, ct:()=>"> 60"},
   {id:"poids", l:"Poids", u:"kg", bas:true, cible:()=>null, ct:()=>"—"},
-  {id:"taille", l:"Tour de taille", u:"cm", bas:true, cible:()=>94, ct:()=>"< 94"}
+  {id:"taille", l:"Tour de taille", u:"cm", bas:true, cible:()=>S.sexe==="F"?80:94, ct:()=>S.sexe==="F"?"< 80":"< 94"}
 ];
 
 /* ---------- Stockage ---------- */
@@ -326,7 +339,7 @@ function save(){ try{
 }catch(e){ alert("Impossible d’enregistrer sur cet appareil."); } }
 let D = load(K.days, {});
 let L = load(K.labs, []);
-let S = Object.assign({ldl:1.00, actif:210, kcal:2000, recents:[]}, load(K.set, {}));
+let S = Object.assign({sexe:"H", ldl:1.00, actif:210, kcal:2000, eau:1000, recents:[]}, load(K.set, {}));
 
 /* ---------- Outils ---------- */
 const pad = n => String(n).padStart(2,"0");
@@ -356,7 +369,7 @@ function syncMarche(x){ x.marche = (x.marches||[]).reduce((t,w)=>t+walkMin(w),0)
 function hasJournal(x){ return !!(x && x.j && Object.values(x.j).some(a => a && a.length)); }
 function hasData(x){
   if(!x) return false;
-  if(x.marche||x.piscine||x.autre||x.avocat||(x.marches&&x.marches.length)) return true;
+  if(x.marche||x.piscine||x.autre||x.avocat||x.eauNiv||x.eauMl||(x.marches&&x.marches.length)) return true;
   if((x.repas||[]).some(Boolean)) return true;
   if(hasJournal(x)) return true;
   return [x.p,x.m,x.n].some(o => o && Object.values(o).some(Boolean));
@@ -384,6 +397,8 @@ function contributions(x){
   if(w>0) out.push({k:"activite", l:"Activité physique ("+Math.round((x.marches||[]).reduce((t,m)=>t+walkMin(m),0)+x.piscine+x.autre)+" min)", e:{sucre:30*f, chol:12*f, reins:12*f}});
   const nr = (x.repas||[]).filter(Boolean).length;
   if(nr) out.push({k:"repas", l:"Marche après les repas", e:{sucre:4*nr}});
+  const ml = eauMl(x);
+  if(ml>0) out.push({k:"eau", l:"Eau ("+fmt(ml/1000,2)+" L, "+Math.round(ml/S.eau*100)+" % de l’objectif)", e:{reins:eauEffet(ml)}});
   AUTRES.forEach(it => { const [a,k] = it.p.split("."); if(x[a] && x[a][k]) out.push({k:k, l:it.l, e:it.e}); });
   if(hasJournal(x)){
     // Journal des repas : calcul à partir des quantités
@@ -486,6 +501,18 @@ function rJour(){
 
   <div class="card">
     <h2>💧 Chaque jour</h2>
+    <div class="row" style="display:block"><div class="lbl">Eau bue aujourd’hui<small>total de la journée · objectif ${fmt(S.eau,0)} ml</small></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <button class="chip" data-eaud="-100">−100</button>
+        <input id="eauIn" type="text" inputmode="numeric" value="${eauMl(x)||""}" placeholder="0" style="width:96px;padding:8px;font-size:20px;font-weight:700;text-align:center;border:1px solid var(--line);border-radius:10px">
+        <span>ml</span>
+        <button class="chip" data-eaud="100">+100</button>
+      </div>
+      ${(()=>{ const ml = eauMl(x); if(!ml) return `<p class="muted" style="margin:6px 0 0">Saisissez le total du jour le soir.</p>`;
+        const pct = Math.round(ml/S.eau*100);
+        return `<div class="bar" style="margin-top:8px"><i style="width:${Math.min(100,pct)}%;background:${pct>=100?"var(--good)":"var(--warn)"}"></i></div>
+        <p class="muted" style="margin:0"><b>${pct} %</b> de votre objectif ${pct>=100?"✅":"· encore "+fmt(S.eau-ml,0)+" ml"}${ml>S.eau && ml<EAU_MAX?" · bonus jusqu’à 1,5 L":""}</p>`; })()}
+    </div>
     ${AUTRES.map(it=>{ const [a,k] = it.p.split("."); return `<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${tog(it.p, !!x[a][k], it.neg)}</div>`; }).join("")}
   </div>
 
@@ -542,6 +569,10 @@ function bindDay(){
     WD = {km:"", min:"", al:WD.al};
     edit(x => { x.marches.push(w); });
   };
+  const setEau = v => edit(x => { x.eauMl = Math.max(0, Math.min(5000, Math.round(v))); delete x.eauNiv; delete x.p.eau; if(!x.eauMl) delete x.eauMl; });
+  const eauIn = document.getElementById("eauIn");
+  eauIn.onchange = () => { const v = parseFloat(eauIn.value.replace(/\s/g,"").replace(",",".")); setEau(v>0 ? v : 0); };
+  app.querySelectorAll("[data-eaud]").forEach(b => b.onclick = () => setEau(eauMl(day(cur)) + +b.dataset.eaud));
   app.querySelectorAll("[data-qw]").forEach(b => b.onclick = () => edit(x => { x.marches.push({min:+b.dataset.qw, al:"n"}); }));
   app.querySelectorAll("[data-delw]").forEach(b => b.onclick = () => edit(x => { x.marches.splice(+b.dataset.delw,1); }));
   app.querySelectorAll("[data-avo]").forEach(b => b.onclick = () => edit(x => { x.avocat = Number(b.dataset.avo); }));
@@ -839,12 +870,16 @@ function rReglages(){
   app.innerHTML = `
   <div class="card">
     <h2>Objectifs</h2>
+    <label class="f">Sexe <select id="ssexe"><option value="H" ${S.sexe!=="F"?"selected":""}>Homme</option><option value="F" ${S.sexe==="F"?"selected":""}>Femme</option></select></label>
+    <p class="muted" style="margin:0">Sert aux seuils du HDL et du tour de taille.</p>
     <label class="f">Objectif LDL (g/l)
       <select id="sldl">${[[1.16,"< 1,16 (faible)"],[1.00,"< 1,00 (modéré)"],[0.70,"< 0,70 (élevé)"],[0.55,"< 0,55 (très élevé)"]].map(([v,t])=>`<option value="${v}" ${S.ldl===v?"selected":""}>${t}</option>`).join("")}</select></label>
     <p class="muted" style="margin:0">À confirmer avec votre médecin selon votre risque cardiovasculaire.</p>
     <label class="f">Activité par semaine (min) <input type="number" inputmode="numeric" id="sact" value="${S.actif}"></label>
     <label class="f">Calories par jour (kcal) <input type="number" inputmode="numeric" id="skcal" value="${S.kcal}"></label>
-    <p class="muted" style="margin:0">Repère moyen pour un homme de 75 ans peu actif : 1 800 à 2 200 kcal. L’infirmière Asalée peut vous donner le bon chiffre.</p>
+    <p class="muted" style="margin:0">À fixer avec votre médecin ou un diététicien : il dépend de l’âge, du poids et de l’activité.</p>
+    <label class="f">Objectif d’eau (ml) <input type="number" inputmode="numeric" id="seau" value="${S.eau}"></label>
+    <p class="muted" style="margin:0">Augmentez-le petit à petit, par exemple de 100 ml toutes les 2 semaines, jusqu’à 1 500 ml, sauf avis médical contraire.</p>
   </div>
   <div class="card">
     <h2>Sauvegarde</h2>
@@ -856,12 +891,14 @@ function rReglages(){
   <div class="card">
     <h2>Comment est calculé le score ?</h2>
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Sucre, Cholestérol et Reins. L’activité compte surtout pour le sucre ; les graisses animales pour le cholestérol ; le sel, l’eau, le bicarbonate et les anti-inflammatoires pour les reins.</p>
-    <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin ou de l’infirmière Asalée.</p>
+    <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres, graisses saturées, sel, fibres et poisson gras. Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 7</p>
+    <p class="muted">Version 11</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
+  document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
+  document.getElementById("seau").onchange = e => { const v = parseInt(e.target.value); if(v>=300 && v<=4000){ S.eau = v; save(); } };
   document.getElementById("skcal").onchange = e => { const v = parseInt(e.target.value); if(v>=1000){ S.kcal = v; save(); } };
   document.getElementById("exp").onclick = exporter;
   document.getElementById("imp").onclick = () => document.getElementById("fileIn").click();
