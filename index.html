@@ -131,10 +131,16 @@ const PLUS = [
   {id:"ptidej", l:"Petit-déjeuner salé / protéiné", s:"poisson, œufs, avocat… pas sucré", e:{sucre:5}}
 ];
 // Toujours comptés (même avec le journal des repas)
-const AUTRES = [
-  {p:"n.bicarb", l:"Bicarbonate de soude", s:"très salé (sodium)", e:{reins:-12}, neg:true},
-  {p:"n.ains", l:"Anti-inflammatoire", s:"ibuprofène, Advil, Nurofen…", e:{reins:-20}, neg:true}
+/* Médicaments et compléments : effet par prise, et explication affichée */
+const MEDS = [
+  {id:"bicarb", l:"Bicarbonate de soude (½ c. à café)", e:{reins:-8}, note:"Très salé : environ 600 mg de sodium par prise, ce qui fait monter la tension."},
+  {id:"magne", l:"Sulfate de magnésium (½ c. à café)", e:{reins:-3}, note:"Laxatif. Le magnésium est éliminé par les reins : si leur fonction est diminuée (DFG < 60), un usage régulier est à signaler au médecin."},
+  {id:"parac", l:"Paracétamol (Doliprane, Dafalgan…)", e:{}, note:"Sans effet sur les reins aux doses habituelles (max. 3 g par jour)."},
+  {id:"ains", l:"Anti-inflammatoire (ibuprofène, Advil, Nurofen…)", e:{reins:-20}, note:"Fatigue les reins : à éviter si possible, surtout si leur fonction est diminuée."},
+  {id:"ipp", l:"Anti-acide IPP (ésoméprazole, oméprazole…)", e:{}, note:"Noté pour le suivi, sans effet sur le score."},
+  {id:"autre", l:"Autre (à préciser)", e:{}, note:"Noté pour le suivi, sans effet sur le score."}
 ];
+const MEDMAP = Object.fromEntries(MEDS.map(m => [m.id, m]));
 
 /* ---------- Aliments (valeurs moyennes pour 100 g, d'après les tables françaises) ----------
    [id, nom, catégorie, kcal, protéines, glucides, sucres, fibres, lipides, graisses saturées, sel, portions, options]
@@ -394,10 +400,12 @@ const fmtShort = s => parse(s).toLocaleDateString("fr-FR", {day:"2-digit", month
 const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-function blank(){ return {marche:0, marches:[], piscine:0, autre:0, repas:[false,false,false], p:{}, m:{}, n:{}, avocat:0, j:{}}; }
+function blank(){ return {marche:0, marches:[], med:[], piscine:0, autre:0, repas:[false,false,false], p:{}, m:{}, n:{}, avocat:0, j:{}}; }
 function day(s){
   const x = D[s] ? Object.assign(blank(), JSON.parse(JSON.stringify(D[s]))) : blank();
   if(!D[s] || !D[s].marches) x.marches = x.marche ? [{min:x.marche, al:"n"}] : [];
+  if(!D[s] || !D[s].med){ x.med = []; if(x.n && x.n.bicarb) x.med.push({id:"bicarb"}); if(x.n && x.n.ains) x.med.push({id:"ains"}); }  // anciennes cases
+  if(x.n){ delete x.n.bicarb; delete x.n.ains; }
   return x;
 }
 /* Marches : durée saisie, sinon distance convertie selon l'allure */
@@ -410,7 +418,7 @@ function syncMarche(x){ x.marche = (x.marches||[]).reduce((t,w)=>t+walkMin(w),0)
 function hasJournal(x){ return !!(x && x.j && Object.values(x.j).some(a => a && a.length)); }
 function hasData(x){
   if(!x) return false;
-  if(x.marche||x.piscine||x.autre||x.avocat||x.eauNiv||x.eauMl||(x.marches&&x.marches.length)) return true;
+  if(x.marche||x.piscine||x.autre||x.avocat||x.eauNiv||x.eauMl||(x.med&&x.med.length)||(x.marches&&x.marches.length)) return true;
   if((x.repas||[]).some(Boolean)) return true;
   if(hasJournal(x)) return true;
   return [x.p,x.m,x.n].some(o => o && Object.values(o).some(Boolean));
@@ -457,7 +465,11 @@ function contributions(x){
   if(nr) out.push({k:"repas", l:"Marche après les repas", e:{sucre:4*nr}});
   const ml = eauMl(x);
   if(ml>0) out.push({k:"eau", l:"Eau ("+fmt(ml/1000,2)+" L, "+Math.round(ml/S.eau*100)+" % de l’objectif)", e:{reins:eauEffet(ml)}, note: ml<S.eau ? "Vous avez bu moins que votre objectif ("+fmt(S.eau,0)+" ml)" : ""});
-  AUTRES.forEach(it => { const [a,k] = it.p.split("."); if(x[a] && x[a][k]) out.push({k:k, l:it.l, e:it.e}); });
+  const meds = (x.med||[]).concat(x.n && x.n.bicarb ? [{id:"bicarb"}] : []).concat(x.n && x.n.ains ? [{id:"ains"}] : []);
+  const cnt = {}; meds.forEach(m => cnt[m.id] = (cnt[m.id]||0)+1);
+  for(const id in cnt){ const m = MEDMAP[id]; if(!m || !Object.keys(m.e).length) continue;
+    const e = {}; for(const a in m.e) e[a] = m.e[a]*cnt[id];
+    out.push({k:"med_"+id, l:m.l.replace(/ \(.*\)$/,"")+(cnt[id]>1?" ×"+cnt[id]:""), e, note:m.note}); }
   if(hasJournal(x)){
     // Journal des repas : calcul à partir des quantités
     const t = totals(x);
@@ -501,7 +513,8 @@ function avg(from, n){
 
 /* ---------- Rendu ---------- */
 let tab = "jour", cur = today();
-let WD = {km:"", min:"", al:"n"};   // marche en cours de saisie
+let WD = {km:"", min:"", al:"n"};
+let quickOpen = false;   // liste rapide affichée même quand le journal des repas est rempli   // marche en cours de saisie
 const app = document.getElementById("app");
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); window.scrollTo(0,0); });
 
@@ -564,7 +577,7 @@ function rJour(){
   </div>
 
   <div class="card">
-    <h2>💧 Chaque jour</h2>
+    <h2>💧 Eau</h2>
     <div class="row" style="display:block"><div class="lbl">Eau bue aujourd’hui<small>total de la journée · objectif ${fmt(S.eau,0)} ml</small></div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
         <button class="chip" data-eaud="-100">−100</button>
@@ -577,12 +590,26 @@ function rJour(){
         return `<div class="bar" style="margin-top:8px"><i style="width:${Math.min(100,pct)}%;background:${pct>=100?"var(--good)":"var(--warn)"}"></i></div>
         <p class="muted" style="margin:0"><b>${pct} %</b> de votre objectif ${pct>=100?"✅":"· encore "+fmt(S.eau-ml,0)+" ml"}${ml>S.eau && ml<EAU_MAX?" · bonus jusqu’à 1,5 L":""}</p>`; })()}
     </div>
-    ${AUTRES.map(it=>{ const [a,k] = it.p.split("."); return `<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${tog(it.p, !!x[a][k], it.neg)}</div>`; }).join("")}
   </div>
 
-  ${jr ? `<div class="tip" style="margin-bottom:12px">🍽️ Vos repas sont notés dans l’onglet <b>Repas</b> avec les quantités : c’est lui qui compte aujourd’hui. La liste rapide ci-dessous est ignorée.</div>`
-       : `<div class="tip" style="margin-bottom:12px">Liste rapide : cochez ce que vous avez mangé. Pour plus de précision (grammes, calories, sel), utilisez l’onglet <b>Repas</b>.</div>`}
-  <div class="${jr?"dim":""}">
+  <div class="card">
+    <h2>💊 Médicaments et compléments</h2>
+    ${x.med.length ? x.med.map((m,i) => { const d = MEDMAP[m.id]||MEDMAP.autre; const neg = Object.values(d.e).some(v=>v<0);
+      return `<div class="row"><div class="lbl">${m.id==="autre" && m.txt ? esc(m.txt) : esc(d.l)}<small style="color:${neg?"var(--bad)":"var(--muted)"}">${neg?"⚠️ ":""}${esc(d.note)}</small></div><button class="chip" data-delmed="${i}">Suppr.</button></div>`; }).join("")
+      : `<p class="muted" style="margin:0 0 6px">Rien de noté aujourd’hui.</p>`}
+    <div style="background:var(--bg);border-radius:12px;padding:10px;margin-top:8px">
+      <select id="medSel" style="width:100%;padding:10px;font-size:17px;border:1px solid var(--line);border-radius:10px;background:#fff">
+        <option value="">Choisir…</option>${MEDS.map(m=>`<option value="${m.id}">${esc(m.l)}</option>`).join("")}
+      </select>
+      <input id="medTxt" type="text" placeholder="Préciser (nom du médicament…)" style="display:none;width:100%;margin-top:8px;padding:10px;font-size:17px;border:1px solid var(--line);border-radius:10px">
+      <button class="btn" id="medAdd" style="margin-top:8px">Ajouter une prise</button>
+    </div>
+  </div>
+
+  ${jr ? `<div class="tip" style="margin-bottom:12px">🍽️ Vos repas sont notés dans l’onglet <b>Repas</b> : c’est lui qui compte aujourd’hui.
+      <button class="chip" id="showQuick" style="display:block;margin-top:8px;background:#fff">${quickOpen?"Masquer":"Afficher"} la liste rapide</button></div>`
+       : `<div class="tip" style="margin-bottom:12px"><b>Liste rapide</b>, pour les jours pressés : cochez en gros ce que vous avez mangé. Pour plus de précision (grammes, ordre du repas…), utilisez plutôt l’onglet <b>Repas</b>.</div>`}
+  <div class="${jr?"dim":""}" ${jr && !quickOpen ? 'style="display:none"' : ""}>
   <div class="card">
     <h2>✅ Ce qui aide</h2>
     ${PLUS.map(it=>`<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${tog("p."+it.id, !!x.p[it.id])}</div>`).join("")}
@@ -600,6 +627,7 @@ function rJour(){
 
   bindDateBar();
   bindDay();
+  const sq = document.getElementById("showQuick"); if(sq) sq.onclick = () => { quickOpen = !quickOpen; const y = window.scrollY; render(); window.scrollTo(0,y); };
 }
 
 function edit(fn){
@@ -636,6 +664,14 @@ function bindDay(){
   const setEau = v => edit(x => { x.eauMl = Math.max(0, Math.min(5000, Math.round(v))); delete x.eauNiv; delete x.p.eau; if(!x.eauMl) delete x.eauMl; });
   const eauIn = document.getElementById("eauIn");
   eauIn.onchange = () => { const v = parseFloat(eauIn.value.replace(/\s/g,"").replace(",",".")); setEau(v>0 ? v : 0); };
+  const medSel = document.getElementById("medSel"), medTxt = document.getElementById("medTxt");
+  medSel.onchange = () => { medTxt.style.display = medSel.value==="autre" ? "block" : "none"; };
+  document.getElementById("medAdd").onclick = () => {
+    const id = medSel.value; if(!id){ alert("Choisissez dans la liste."); return; }
+    const m = {id}; if(id==="autre"){ const t = medTxt.value.trim(); if(!t){ alert("Précisez le nom."); return; } m.txt = t.slice(0,60); }
+    edit(x => { x.med.push(m); });
+  };
+  app.querySelectorAll("[data-delmed]").forEach(b => b.onclick = () => edit(x => { x.med.splice(+b.dataset.delmed,1); }));
   app.querySelectorAll("[data-eaud]").forEach(b => b.onclick = () => setEau(eauMl(day(cur)) + +b.dataset.eaud));
   app.querySelectorAll("[data-qw]").forEach(b => b.onclick = () => edit(x => { x.marches.push({min:+b.dataset.qw, al:"n"}); }));
   app.querySelectorAll("[data-delw]").forEach(b => b.onclick = () => edit(x => { x.marches.splice(+b.dataset.delw,1); }));
@@ -978,10 +1014,10 @@ function rReglages(){
   </div>
   <div class="card">
     <h2>Comment est calculé le score ?</h2>
-    <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau, le bicarbonate et les anti-inflammatoires pour les reins.</p>
+    <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 17</p>
+    <p class="muted">Version 19</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
