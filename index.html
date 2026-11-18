@@ -330,12 +330,23 @@ const fmtShort = s => parse(s).toLocaleDateString("fr-FR", {day:"2-digit", month
 const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-function blank(){ return {marche:0, piscine:0, autre:0, repas:[false,false,false], p:{}, m:{}, n:{}, avocat:0, j:{}}; }
-function day(s){ return D[s] ? Object.assign(blank(), JSON.parse(JSON.stringify(D[s]))) : blank(); }
+function blank(){ return {marche:0, marches:[], piscine:0, autre:0, repas:[false,false,false], p:{}, m:{}, n:{}, avocat:0, j:{}}; }
+function day(s){
+  const x = D[s] ? Object.assign(blank(), JSON.parse(JSON.stringify(D[s]))) : blank();
+  if(!D[s] || !D[s].marches) x.marches = x.marche ? [{min:x.marche, al:"n"}] : [];
+  return x;
+}
+/* Marches : durée saisie, sinon distance convertie selon l'allure */
+const PACE = {l:20, n:15, r:12};          // minutes par km
+const INTENS = {l:0.8, n:1, r:1.2};        // effet sur le score
+const ALLURE = {l:"lente", n:"normale", r:"rapide"};
+const walkMin = w => w.min>0 ? w.min : Math.round((w.km||0)*PACE[w.al||"n"]);
+const walkKm = w => w.km>0 ? w.km : 0;
+function syncMarche(x){ x.marche = (x.marches||[]).reduce((t,w)=>t+walkMin(w),0); }
 function hasJournal(x){ return !!(x && x.j && Object.values(x.j).some(a => a && a.length)); }
 function hasData(x){
   if(!x) return false;
-  if(x.marche||x.piscine||x.autre||x.avocat) return true;
+  if(x.marche||x.piscine||x.autre||x.avocat||(x.marches&&x.marches.length)) return true;
   if((x.repas||[]).some(Boolean)) return true;
   if(hasJournal(x)) return true;
   return [x.p,x.m,x.n].some(o => o && Object.values(o).some(Boolean));
@@ -358,7 +369,7 @@ function totals(x, meal){
 function contributions(x){
   // renvoie une liste {cle, libellé, effets}
   const out = [];
-  const w = x.marche + x.piscine*1.3 + x.autre;
+  const w = (x.marches||[]).reduce((t,m)=>t+walkMin(m)*INTENS[m.al||"n"],0) + x.piscine*1.3 + x.autre;
   const f = Math.min(w, 60)/60;
   if(w>0) out.push({k:"activite", l:"Activité physique", e:{sucre:30*f, chol:12*f, reins:12*f}});
   const nr = (x.repas||[]).filter(Boolean).length;
@@ -404,6 +415,7 @@ function avg(from, n){
 
 /* ---------- Rendu ---------- */
 let tab = "jour", cur = today();
+let WD = {km:"", min:"", al:"n"};   // marche en cours de saisie
 const app = document.getElementById("app");
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); window.scrollTo(0,0); });
 
@@ -443,8 +455,18 @@ function rJour(){
 
   <div class="card">
     <h2>🚶 Activité</h2>
-    <div class="row"><div class="lbl">Marche</div>${stepper("marche", x.marche, 5, " min")}</div>
-    <div class="quick"><button data-add="marche" data-v="15">+15 min</button><button data-add="marche" data-v="30">+30 min</button></div>
+    <div class="row"><div class="lbl"><b>Marche</b><small>${x.marches.length?x.marches.length+" marche"+(x.marches.length>1?"s":"")+" · "+(x.marches.some(walkKm)?fmt(x.marches.reduce((t,w)=>t+walkKm(w),0),1)+" km · ":"")+x.marche+" min":"aucune pour l’instant"}</small></div></div>
+    ${x.marches.map((w,i)=>`<div class="row"><div class="lbl">${w.km>0?fmt(w.km,1)+" km · ":""}${walkMin(w)} min${w.min>0?"":" (estimé)"}<small>allure ${ALLURE[w.al||"n"]}</small></div><button class="chip" data-delw="${i}">Suppr.</button></div>`).join("")}
+    <div style="background:var(--bg);border-radius:12px;padding:10px;margin-top:8px">
+      <div style="display:flex;gap:8px">
+        <label style="flex:1;font-size:14px;color:var(--muted)">Distance (km)<input id="wkm" type="text" inputmode="decimal" placeholder="ex. 3,5" value="${esc(WD.km)}" style="width:100%;padding:9px;font-size:17px;border:1px solid var(--line);border-radius:8px;margin-top:3px"></label>
+        <label style="flex:1;font-size:14px;color:var(--muted)">Durée (min)<input id="wmin" type="text" inputmode="numeric" placeholder="facultatif" value="${esc(WD.min)}" style="width:100%;padding:9px;font-size:17px;border:1px solid var(--line);border-radius:8px;margin-top:3px"></label>
+      </div>
+      <div class="chips" style="margin-top:8px">${["l","n","r"].map(a=>`<button class="chip ${WD.al===a?"on":""}" data-wal="${a}">${ALLURE[a][0].toUpperCase()+ALLURE[a].slice(1)}</button>`).join("")}</div>
+      <p class="muted" id="wprev" style="margin:6px 0 0"></p>
+      <button class="btn" id="wadd" style="margin-top:8px">Ajouter cette marche</button>
+    </div>
+    <div class="quick"><span class="muted" style="align-self:center">Sans distance :</span><button data-qw="15">+15 min</button><button data-qw="30">+30 min</button></div>
     <div class="row"><div class="lbl">Piscine</div>${stepper("piscine", x.piscine, 5, " min")}</div>
     <div class="quick"><button data-add="piscine" data-v="30">+30 min</button><button data-add="piscine" data-v="45">+45 min</button></div>
     <div class="row"><div class="lbl">Autre<small>vélo, jardinage, gym…</small></div>${stepper("autre", x.autre, 5, " min")}</div>
@@ -480,7 +502,7 @@ function rJour(){
 }
 
 function edit(fn){
-  const x = day(cur); fn(x);
+  const x = day(cur); fn(x); syncMarche(x);
   if(hasData(x)) D[cur] = x; else delete D[cur];
   save();
   const y = window.scrollY; render(); window.scrollTo(0,y);
@@ -493,6 +515,25 @@ function bindDay(){
   app.querySelectorAll("[data-add]").forEach(b => b.onclick = () => edit(x => { x[b.dataset.add] += Number(b.dataset.v); }));
   app.querySelectorAll("[data-tog]").forEach(b => b.onclick = () => edit(x => { const [a,k] = b.dataset.tog.split("."); x[a][k] = !x[a][k]; }));
   app.querySelectorAll("[data-repas]").forEach(b => b.onclick = () => edit(x => { const i = +b.dataset.repas; x.repas = x.repas.slice(); x.repas[i] = !x.repas[i]; }));
+  const wkm = document.getElementById("wkm"), wmin = document.getElementById("wmin"), wprev = document.getElementById("wprev");
+  const num = v => { const n = parseFloat(String(v).replace(",",".")); return n>0 ? n : 0; };
+  const prev = () => {
+    WD.km = wkm.value; WD.min = wmin.value;
+    const k = num(WD.km), m = num(WD.min);
+    wprev.textContent = m ? (k ? "Durée retenue : "+Math.round(m)+" min ("+fmt(k/(m/60),1)+" km/h)" : "Durée retenue : "+Math.round(m)+" min")
+                      : k ? "≈ "+Math.round(k*PACE[WD.al])+" min estimées (allure "+ALLURE[WD.al]+" : "+PACE[WD.al]+" min par km)" : "Indiquez la distance, la durée, ou les deux.";
+  };
+  wkm.oninput = prev; wmin.oninput = prev; prev();
+  app.querySelectorAll("[data-wal]").forEach(b => b.onclick = () => { WD.al = b.dataset.wal; prev(); app.querySelectorAll("[data-wal]").forEach(c=>c.classList.toggle("on", c===b)); prev(); });
+  document.getElementById("wadd").onclick = () => {
+    const k = num(wkm.value), m = num(wmin.value);
+    if(!k && !m){ alert("Indiquez la distance ou la durée."); return; }
+    const w = {al:WD.al}; if(k) w.km = Math.round(k*100)/100; if(m) w.min = Math.round(m);
+    WD = {km:"", min:"", al:WD.al};
+    edit(x => { x.marches.push(w); });
+  };
+  app.querySelectorAll("[data-qw]").forEach(b => b.onclick = () => edit(x => { x.marches.push({min:+b.dataset.qw, al:"n"}); }));
+  app.querySelectorAll("[data-delw]").forEach(b => b.onclick = () => edit(x => { x.marches.splice(+b.dataset.delw,1); }));
   app.querySelectorAll("[data-avo]").forEach(b => b.onclick = () => edit(x => { x.avocat = Number(b.dataset.avo); }));
 }
 
@@ -601,7 +642,7 @@ function openQty(meal, fid, grams, idx){
   draw();
 }
 function editJ(fn){
-  const x = day(cur); x.j = x.j||{}; fn(x);
+  const x = day(cur); x.j = x.j||{}; fn(x); syncMarche(x);
   if(hasData(x)) D[cur] = x; else delete D[cur];
   save();
 }
@@ -627,9 +668,9 @@ function verdict(now, before, label){
 
 function rBilan(){
   const t = today(), a = avg(t,7), b = avg(addDays(t,-7),7);
-  let min = 0, marche = 0, piscine = 0, repas = 0; const agg = {};
+  let min = 0, marche = 0, piscine = 0, repas = 0, km = 0; const agg = {};
   for(let i=0;i<7;i++){ const s = addDays(t,-i); if(!D[s]) continue; const x = day(s);
-    min += x.marche+x.piscine+x.autre; marche += x.marche; piscine += x.piscine; repas += x.repas.filter(Boolean).length;
+    min += x.marche+x.piscine+x.autre; marche += x.marche; km += x.marches.reduce((t,w)=>t+walkKm(w),0); piscine += x.piscine; repas += x.repas.filter(Boolean).length;
     contributions(x).forEach(c => { if(!agg[c.k]) agg[c.k] = {l:c.l.replace(/^Demi-avocat|^Avocat entier/,"Avocat").replace(/ \([^)]*\)$/,""), e:{}}; for(const k in c.e) agg[c.k].e[k] = (agg[c.k].e[k]||0)+c.e[k]; });
   }
   const pct = Math.min(100, Math.round(min/S.actif*100));
@@ -649,7 +690,7 @@ function rBilan(){
     <h2>🚶 Activité de la semaine</h2>
     <div style="display:flex;justify-content:space-between"><b>${min} min</b><span class="muted">objectif ${S.actif} min</span></div>
     <div class="bar"><i style="width:${pct}%"></i></div>
-    <p class="muted" style="margin:4px 0 0">Marche ${marche} min · Piscine ${piscine} min · ${repas} marche${repas>1?"s":""} après repas</p>
+    <p class="muted" style="margin:4px 0 0">Marche ${marche} min${km?" ("+fmt(km,1)+" km)":""} · Piscine ${piscine} min · ${repas} marche${repas>1?"s":""} après repas</p>
   </div>
 
   <div class="card">
@@ -747,7 +788,7 @@ function rAnalyses(){
   ${labForm ? `<div class="card" id="lf">
     <h2>Nouvelle prise de sang</h2>
     <label class="f">Date <input type="date" id="ld" value="${today()}"></label>
-    ${LABS.map(m=>`<label class="f">${m.l}${m.u?` (${m.u})`:""} <input type="number" inputmode="decimal" step="any" data-lab="${m.id}"></label>`).join("")}
+    ${LABS.map(m=>`<label class="f">${m.l}${m.u?` (${m.u})`:""} <input type="text" inputmode="decimal" data-lab="${m.id}"></label>`).join("")}
     <p class="muted">Laissez vide ce qui n’a pas été mesuré.</p>
     <button class="btn" id="saveLab">Enregistrer</button>
   </div>` : ""}
@@ -789,7 +830,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Sucre, Cholestérol et Reins. L’activité compte surtout pour le sucre ; les graisses animales pour le cholestérol ; le sel, l’eau, le bicarbonate et les anti-inflammatoires pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin ou de l’infirmière Asalée.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres, graisses saturées, sel, fibres et poisson gras. Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 3</p>
+    <p class="muted">Version 4</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
