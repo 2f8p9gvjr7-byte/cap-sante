@@ -77,14 +77,36 @@ th:first-child,td:first-child{text-align:left}
 #upd button{margin-left:auto;background:#fff;color:#1f2933;border:0;border-radius:10px;padding:8px 12px;font-weight:600;font-size:15px}
 .hidden{display:none}
 .tip{font-size:14px;background:var(--teal-l);border-radius:10px;padding:10px;margin-top:8px}
+.meal h2{display:flex;justify-content:space-between;align-items:center}
+.meal h2 small{font-size:14px;color:var(--muted);font-weight:500}
+.item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left;font:inherit;color:inherit}
+.item small{display:block;color:var(--muted);font-size:13px}
+.item .k{font-weight:600;white-space:nowrap}
+.add{border:1px dashed var(--teal);background:var(--teal-l);color:var(--teal);border-radius:12px;padding:10px;width:100%;font-size:16px;font-weight:600;margin-top:8px}
+.nut{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;font-size:15px}
+.nut .bar{grid-column:1/3;margin:2px 0 8px}
+.nut .bar.over i{background:var(--bad)}
+#ov{position:fixed;inset:0;z-index:20;background:var(--bg);display:none;flex-direction:column}
+#ov.on{display:flex}
+#ov .top{display:flex;gap:8px;align-items:center;padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;background:#fff;border-bottom:1px solid var(--line)}
+#ov .top input{flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);font-size:17px;background:var(--bg)}
+#ov .top button{border:0;background:none;color:var(--teal);font-size:17px;padding:8px 4px}
+#ov .body{flex:1;overflow:auto;padding:4px 12px calc(env(safe-area-inset-bottom) + 20px)}
+#ov .cat{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 2px}
+.qty{display:flex;align-items:center;justify-content:center;gap:10px;margin:14px 0}
+.qty input{width:110px;font-size:26px;font-weight:700;text-align:center;padding:8px;border:1px solid var(--line);border-radius:12px}
+.qty button{width:52px;height:52px;border-radius:50%;border:1px solid var(--line);background:#fff;font-size:26px;color:var(--teal)}
+.dim{opacity:.45}
 </style>
 </head>
 <body>
 <header><h1>Cap Santé</h1><p id="sub">Sucre · Cholestérol · Reins</p></header>
 <main id="app"></main>
+<div id="ov"></div>
 <div id="upd">Nouvelle version disponible <button id="updBtn">Mettre à jour</button></div>
 <nav>
   <button data-t="jour" class="on"><span>📝</span>Aujourd’hui</button>
+  <button data-t="repas"><span>🍽️</span>Repas</button>
   <button data-t="bilan"><span>📈</span>Tendance</button>
   <button data-t="analyses"><span>🩸</span>Analyses</button>
   <button data-t="reglages"><span>⚙️</span>Réglages</button>
@@ -106,9 +128,157 @@ const PLUS = [
   {id:"legumineuses", l:"Légumineuses", s:"lentilles, pois chiches, haricots", e:{sucre:6, chol:6}},
   {id:"complet", l:"Pain / céréales complets", s:"au lieu des blancs", e:{sucre:6, chol:2}},
   {id:"noix", l:"Poignée de fruits à coque", s:"noix, amandes, non salés", e:{chol:5}},
-  {id:"ptidej", l:"Petit-déjeuner salé / protéiné", s:"poisson, œufs, avocat… pas sucré", e:{sucre:5}},
-  {id:"eau", l:"Eau : 1,5 L ou plus", e:{reins:10}}
+  {id:"ptidej", l:"Petit-déjeuner salé / protéiné", s:"poisson, œufs, avocat… pas sucré", e:{sucre:5}}
 ];
+// Toujours comptés (même avec le journal des repas)
+const AUTRES = [
+  {p:"p.eau", l:"Eau : 1,5 L ou plus", e:{reins:10}, neg:false},
+  {p:"n.bicarb", l:"Bicarbonate de soude", s:"très salé (sodium)", e:{reins:-12}, neg:true},
+  {p:"n.ains", l:"Anti-inflammatoire", s:"ibuprofène, Advil, Nurofen…", e:{reins:-20}, neg:true}
+];
+
+/* ---------- Aliments (valeurs moyennes pour 100 g, d'après les tables françaises) ----------
+   [id, nom, catégorie, kcal, protéines, glucides, sucres, fibres, lipides, graisses saturées, sel, portions, options]
+   options : ig = part des glucides à index glycémique élevé (0 à 1), o3 = poisson gras, alc = grammes par verre */
+const MEALS = [["pdj","☀️ Petit-déjeuner"],["dej","🍽️ Déjeuner"],["enc","🍎 En-cas"],["din","🌙 Dîner"]];
+const FOODS_RAW = [
+ // Poissons
+ ["sard_h","Sardines à l’huile (égouttées)","Poissons",210,24,0,0,0,12.5,3,0.9,[["1 boîte égouttée",85],["½ boîte",42]],{o3:1}],
+ ["sard_n","Sardines au naturel / citron","Poissons",160,24,0,0,0,7,2,0.9,[["1 boîte égouttée",85]],{o3:1}],
+ ["maq_h","Maquereau à l’huile (égoutté)","Poissons",230,21,0,0,0,16,3.5,1,[["1 boîte égouttée",110],["½ boîte",55]],{o3:1}],
+ ["maq_v","Maquereau au vin blanc","Poissons",170,16,2,1,0,11,2.5,1.2,[["1 boîte",150],["½ boîte",75]],{o3:1}],
+ ["maq_f","Maquereau frais cuit","Poissons",230,21,0,0,0,16,4,0.2,[["1 filet",120]],{o3:1}],
+ ["thon_n","Thon au naturel","Poissons",115,26,0,0,0,1,0.3,0.9,[["1 boîte",140],["½ boîte",70]],{}],
+ ["thon_h","Thon à l’huile (égoutté)","Poissons",190,27,0,0,0,9,1.5,0.9,[["1 boîte",120]],{}],
+ ["saumon","Saumon cuit","Poissons",200,22,0,0,0,12,2.3,0.15,[["1 pavé",125]],{o3:1}],
+ ["saum_f","Saumon fumé","Poissons",180,22,0,0,0,10,2,3,[["1 tranche",30],["2 tranches",60]],{o3:1}],
+ ["cabil","Cabillaud / colin cuit","Poissons",90,20,0,0,0,1,0.2,0.3,[["1 filet",150]],{}],
+ ["crev","Crevettes cuites","Poissons",95,21,0,0,0,1.2,0.3,1.5,[["1 portion",100]],{}],
+ // Œufs
+ ["oeuf","Œuf","Œufs",140,12.5,0.5,0.5,0,10,2.8,0.35,[["1 œuf",50],["2 œufs",100],["3 œufs",150]],{}],
+ // Viandes
+ ["poulet","Blanc de poulet cuit","Viandes",150,30,0,0,0,3,0.8,0.2,[["1 blanc",120]],{}],
+ ["cuisse","Cuisse de poulet cuite","Viandes",200,26,0,0,0,10,2.8,0.2,[["1 cuisse",150]],{}],
+ ["dinde","Escalope de dinde","Viandes",135,29,0,0,0,2,0.6,0.15,[["1 escalope",120]],{}],
+ ["boeuf","Steak de bœuf maigre","Viandes",160,28,0,0,0,5,2.2,0.15,[["1 steak",120]],{}],
+ ["hache","Steak haché 15 %","Viandes",250,26,0,0,0,16,7,0.2,[["1 steak haché",125]],{}],
+ ["agneau","Agneau (côtelettes, gigot)","Viandes",280,25,0,0,0,20,9,0.2,[["1 portion",120]],{}],
+ ["porc","Côte de porc","Viandes",220,27,0,0,0,12,4.3,0.15,[["1 côte",130]],{}],
+ ["merguez","Merguez","Viandes",300,16,1,0,0,26,10,2,[["1 merguez",50],["2 merguez",100]],{}],
+ ["saucisse","Saucisse","Viandes",290,17,1,0,0,24,9,1.8,[["1 saucisse",100]],{}],
+ ["jambon","Jambon blanc","Charcuterie",115,20,1,0.5,0,3.5,1.2,2,[["1 tranche",45],["2 tranches",90]],{}],
+ ["jcru","Jambon cru","Charcuterie",230,28,0,0,0,13,4.3,5,[["1 tranche",20]],{}],
+ ["saucisson","Saucisson","Charcuterie",420,25,2,1,0,35,13,4.5,[["5 rondelles",30]],{}],
+ ["lardons","Lardons","Charcuterie",300,16,0,0,0,26,10,2.5,[["1 portion",50]],{}],
+ // Légumes
+ ["tomate","Tomate","Légumes",20,0.9,3,2.6,1.2,0.2,0,0,[["1 tomate",120]],{}],
+ ["salade","Salade verte","Légumes",15,1.3,1.5,1,1.5,0.2,0,0,[["1 bol",50]],{}],
+ ["carotte","Carottes","Légumes",30,0.7,5,4,2.5,0.2,0,0.1,[["1 portion",150]],{}],
+ ["hvert","Haricots verts","Légumes",30,2,4,1.5,3,0.2,0,0,[["1 portion",150]],{}],
+ ["courg","Courgettes","Légumes",18,1,2,1.5,1.3,0.3,0,0,[["1 portion",150]],{}],
+ ["brocoli","Brocoli","Légumes",30,2.5,3,1.5,2.5,0.4,0.1,0,[["1 portion",150]],{}],
+ ["epinard","Épinards","Légumes",25,3,1,0.5,2.5,0.4,0.1,0.2,[["1 portion",150]],{}],
+ ["poivron","Poivron","Légumes",25,1,4.5,4,2,0.2,0,0,[["½ poivron",80]],{}],
+ ["concombre","Concombre","Légumes",13,0.6,2,1.5,0.6,0.1,0,0,[["½ concombre",150]],{}],
+ ["champi","Champignons","Légumes",25,3,0.5,0.3,2,0.3,0,0,[["1 portion",100]],{}],
+ ["choufl","Chou-fleur","Légumes",25,2,2.5,2,2.5,0.3,0,0,[["1 portion",150]],{}],
+ ["ratat","Ratatouille","Légumes",50,1.2,5,4,2,2.5,0.4,0.5,[["1 portion",200]],{}],
+ ["soupe","Soupe de légumes maison","Légumes",30,1,4,2,1.2,1,0.2,0.6,[["1 bol",250]],{}],
+ ["soupe_i","Soupe industrielle (brique)","Légumes",40,1,5,2,1,1.5,0.4,0.8,[["1 bol",250]],{}],
+ ["chorba","Chorba / harira","Légumes",60,3,7,1,1.5,2,0.5,0.8,[["1 bol",300]],{}],
+ ["olives","Olives","Légumes",140,1,1,0,3,14,2,3.5,[["5 olives",20]],{}],
+ // Légumineuses
+ ["lentilles","Lentilles cuites","Légumineuses",115,9,15,0.5,8,0.6,0.1,0.02,[["1 portion",200]],{}],
+ ["pchiche","Pois chiches cuits","Légumineuses",140,8,17,1,6,2.5,0.3,0.05,[["1 portion",150]],{}],
+ ["haricots","Haricots blancs / rouges cuits","Légumineuses",110,8,13,0.5,8,0.5,0.1,0.01,[["1 portion",150]],{}],
+ // Féculents
+ ["baguette","Pain blanc (baguette)","Pain et féculents",270,9,56,3,2.7,1.2,0.3,1.3,[["1 morceau (5 cm)",30],["¼ de baguette",60]],{ig:1}],
+ ["pcomplet","Pain complet / aux céréales","Pain et féculents",240,9,43,3,7,2,0.4,1.1,[["1 tranche",35],["2 tranches",70]],{}],
+ ["pmie","Pain de mie","Pain et féculents",270,8,50,5,3,4,0.6,1.1,[["1 tranche",25]],{ig:1}],
+ ["biscotte","Biscottes","Pain et féculents",400,11,72,6,4,6,1,1.1,[["2 biscottes",20]],{ig:1}],
+ ["riz","Riz blanc cuit","Pain et féculents",130,2.7,28,0.1,0.4,0.3,0.1,0,[["1 portion",150]],{ig:1}],
+ ["rizc","Riz complet cuit","Pain et féculents",125,2.8,25,0.3,1.8,0.9,0.2,0,[["1 portion",150]],{}],
+ ["pates","Pâtes cuites","Pain et féculents",140,5,28,0.6,1.8,0.8,0.2,0,[["1 portion",200]],{ig:0.5}],
+ ["patesc","Pâtes complètes cuites","Pain et féculents",125,5,24,0.8,4,0.9,0.2,0,[["1 portion",200]],{}],
+ ["pdt","Pommes de terre vapeur","Pain et féculents",80,2,17,0.7,1.8,0.1,0,0,[["1 portion",200]],{ig:1}],
+ ["puree","Purée","Pain et féculents",90,2,13,1.5,1.2,3.5,2,0.6,[["1 portion",200]],{ig:1}],
+ ["frites","Frites","Pain et féculents",280,3.5,35,0.5,3,14,1.5,0.5,[["1 portion",150]],{ig:1}],
+ ["semoule","Semoule (couscous) cuite","Pain et féculents",150,5,30,0.2,2,0.5,0.1,0,[["1 portion",150]],{ig:0.5}],
+ ["quinoa","Quinoa cuit","Pain et féculents",120,4,20,0.9,2.8,1.9,0.2,0,[["1 portion",150]],{}],
+ ["avoine","Flocons d’avoine","Pain et féculents",370,13,58,1,10,7,1.3,0,[["1 bol",40]],{}],
+ ["muesli","Muesli sans sucre ajouté","Pain et féculents",370,9,63,15,7,7,1.5,0.1,[["1 bol",50]],{}],
+ ["cereales","Céréales sucrées","Pain et féculents",390,7,82,30,4,3,0.8,0.7,[["1 bol",40]],{ig:1}],
+ // Fruits
+ ["avocat","Avocat","Fruits",205,1.6,1,0.5,4.5,20.6,3.3,0.02,[["½ avocat",75],["1 avocat",150]],{}],
+ ["banane","Banane","Fruits",90,1,20,15,2,0.3,0.1,0,[["1 banane",120]],{}],
+ ["pomme","Pomme","Fruits",53,0.3,11.5,10,2,0.2,0,0,[["1 pomme",150]],{}],
+ ["poire","Poire","Fruits",55,0.4,12,9,3,0.1,0,0,[["1 poire",150]],{}],
+ ["orange","Orange","Fruits",47,0.9,9,8,2,0.1,0,0,[["1 orange",150]],{}],
+ ["clem","Clémentine","Fruits",47,0.8,10,9,1.5,0.2,0,0,[["1 clémentine",70],["2 clémentines",140]],{}],
+ ["kiwi","Kiwi","Fruits",60,1,11,9,2.5,0.5,0,0,[["1 kiwi",75]],{}],
+ ["raisin","Raisin","Fruits",70,0.6,16,16,1,0.2,0,0,[["1 grappe",125]],{}],
+ ["fraises","Fraises","Fruits",35,0.6,6,5,2,0.3,0,0,[["1 barquette",150]],{}],
+ ["dattes","Dattes","Fruits",290,2.5,65,64,7,0.4,0.1,0,[["1 datte",8],["3 dattes",24]],{}],
+ ["compote","Compote sans sucre ajouté","Fruits",65,0.3,14,12,1.5,0.2,0,0,[["1 pot",100]],{}],
+ ["compote_s","Compote sucrée","Fruits",85,0.2,20,18,1.5,0.2,0,0,[["1 pot",100]],{}],
+ // Fruits à coque
+ ["noix","Noix","Fruits à coque",700,15,7,2.6,6.7,65,6,0,[["1 poignée",30]],{}],
+ ["amandes","Amandes","Fruits à coque",630,25,7,4,12,53,4,0,[["1 poignée",30]],{}],
+ ["cacahuetes","Cacahuètes salées","Fruits à coque",600,25,12,4,8,49,8,1,[["1 poignée",30]],{}],
+ // Laitiers
+ ["lait","Lait demi-écrémé","Produits laitiers",46,3.3,4.8,4.8,0,1.6,1,0.1,[["1 bol",250],["1 verre",200]],{}],
+ ["yaourt","Yaourt nature","Produits laitiers",55,4.2,5,5,0,1.8,1.1,0.1,[["1 pot",125]],{}],
+ ["yaourt_s","Yaourt aux fruits / sucré","Produits laitiers",95,3.5,14,13,0.3,2.7,1.8,0.1,[["1 pot",125]],{}],
+ ["fblanc","Fromage blanc","Produits laitiers",75,7,4,4,0,3,2,0.1,[["1 portion",100]],{}],
+ ["camembert","Camembert, brie","Fromages",270,20,0.5,0.5,0,21,14,1.4,[["1 portion",30]],{}],
+ ["comte","Comté, gruyère","Fromages",410,28,0,0,0,33,21,0.9,[["1 portion",30]],{}],
+ ["emmental","Emmental râpé","Fromages",380,28,0,0,0,29,19,0.7,[["1 poignée",20]],{}],
+ ["chevre","Fromage de chèvre","Fromages",300,18,1,1,0,25,17,1.3,[["1 portion",30]],{}],
+ ["vqr","Fromage fondu en portion","Fromages",240,10,6,6,0,19,13,2,[["1 portion",17]],{}],
+ // Matières grasses et sauces
+ ["huile_o","Huile d’olive","Matières grasses",900,0,0,0,0,100,14,0,[["1 c. à café",5],["1 c. à soupe",10]],{}],
+ ["huile_c","Huile de colza","Matières grasses",900,0,0,0,0,100,7.5,0,[["1 c. à café",5],["1 c. à soupe",10]],{}],
+ ["beurre","Beurre","Matières grasses",740,0.7,0.6,0.6,0,82,54,0.05,[["1 noisette",5],["1 portion",10]],{}],
+ ["margarine","Margarine","Matières grasses",540,0,0,0,0,60,13,0.8,[["1 portion",10]],{}],
+ ["creme","Crème fraîche épaisse","Matières grasses",300,2.4,3,3,0,30,20,0.05,[["1 c. à soupe",15]],{}],
+ ["creme_l","Crème légère 15 %","Matières grasses",160,3,4,4,0,15,10,0.1,[["1 c. à soupe",15]],{}],
+ ["vinaigrette","Vinaigrette","Matières grasses",450,0.5,3,2,0,48,6,2.5,[["1 c. à soupe",15]],{}],
+ ["mayo","Mayonnaise","Matières grasses",700,1.5,1.5,1,0,76,6,1.4,[["1 c. à soupe",15]],{}],
+ ["ketchup","Ketchup","Matières grasses",110,1.2,25,22,0.5,0.2,0,2,[["1 c. à soupe",15]],{}],
+ ["stomate","Sauce tomate","Matières grasses",50,1.5,7,5,1.5,1.5,0.2,0.8,[["1 portion",50]],{}],
+ // Sucré
+ ["sucre","Sucre","Sucré",400,0,100,100,0,0,0,0,[["1 morceau",5],["2 morceaux",10]],{ig:1}],
+ ["confiture","Confiture","Sucré",240,0.4,58,55,1,0.1,0,0,[["1 c. à soupe",20]],{ig:1}],
+ ["miel","Miel","Sucré",320,0.4,80,80,0,0,0,0,[["1 c. à café",10]],{ig:1}],
+ ["choc_n","Chocolat noir 70 %","Sucré",570,8,33,28,11,41,25,0,[["2 carrés",10],["4 carrés",20]],{}],
+ ["choc_l","Chocolat au lait","Sucré",550,7,55,52,2,32,20,0.25,[["2 carrés",10],["4 carrés",20]],{}],
+ ["croissant","Croissant","Sucré",410,8,45,8,2.5,21,13,1,[["1 croissant",60]],{ig:1}],
+ ["painchoc","Pain au chocolat","Sucré",420,8,48,12,3,21,13,0.9,[["1 pain au chocolat",70]],{ig:1}],
+ ["biscuits","Biscuits secs","Sucré",450,7,74,24,2.5,13,7,0.9,[["1 biscuit",8],["4 biscuits",32]],{ig:1}],
+ ["gateau","Gâteau, pâtisserie","Sucré",380,5,50,30,1.5,18,10,0.5,[["1 part",80]],{ig:1}],
+ ["porient","Pâtisserie orientale","Sucré",430,6,55,35,2.5,21,6,0.2,[["1 pièce",40]],{ig:1}],
+ ["glace","Glace","Sucré",200,3.5,25,22,0.5,10,6,0.15,[["1 boule",50],["2 boules",100]],{}],
+ // Boissons
+ ["jus","Jus d’orange","Boissons",45,0.7,10,9,0.2,0.1,0,0,[["1 verre",200]],{ig:1}],
+ ["soda","Soda","Boissons",42,0,10.5,10.5,0,0,0,0.02,[["1 canette",330],["1 verre",200]],{ig:1}],
+ ["soda0","Soda zéro","Boissons",1,0,0,0,0,0,0,0.02,[["1 canette",330]],{}],
+ ["the_m","Thé à la menthe sucré","Boissons",35,0,9,9,0,0,0,0,[["1 verre",150]],{ig:1}],
+ ["cafe","Café / thé sans sucre","Boissons",1,0.1,0,0,0,0,0,0,[["1 tasse",150]],{}],
+ ["vin","Vin","Boissons",85,0.1,0.2,0.2,0,0,0,0,[["1 verre",125]],{alc:125}],
+ ["biere","Bière","Boissons",42,0.4,3.5,0.3,0,0,0,0,[["1 demi",250]],{alc:250}],
+ // Plats
+ ["couscous","Couscous (plat complet)","Plats",150,8,17,2,2.5,5,1.5,0.7,[["1 assiette",350]],{ig:0.5}],
+ ["tajine","Tajine de poulet","Plats",110,10,6,3,1.5,5,1.3,0.6,[["1 assiette",300]],{}],
+ ["pizza","Pizza","Plats",260,11,30,3,2,10,4.5,1.4,[["½ pizza",200],["1 part",100]],{ig:1}],
+ ["quiche","Quiche","Plats",270,9,18,2,1,18,9,0.9,[["1 part",150]],{ig:0.5}],
+ ["lasagnes","Lasagnes","Plats",150,8,13,3,1,7,3,0.8,[["1 portion",300]],{ig:0.5}],
+ ["sandwich","Sandwich jambon-beurre","Plats",260,11,30,2,1.5,10,5,1.5,[["1 sandwich",250]],{ig:1}],
+ ["burger","Hamburger","Plats",250,12,26,5,1.5,11,4.5,1.2,[["1 burger",200]],{ig:1}],
+ ["chips","Chips","Plats",530,6,50,1,4.5,33,3,1.2,[["1 petit paquet",30]],{ig:1}]
+];
+const FOODS = {};
+FOODS_RAW.forEach(r => { FOODS[r[0]] = {id:r[0], n:r[1], c:r[2], kcal:r[3], prot:r[4], gluc:r[5], suc:r[6], fib:r[7], lip:r[8], ags:r[9], sel:r[10], por:r[11], o:r[12]||{}}; });
+const LIM = {suc:40, ags:18, sel:6, fib:25};
 // Ce qui éloigne (compteurs). free = nombre « gratuit » avant pénalité
 const MOINS = [
   {id:"sucres", l:"Sucre rapide", s:"soda, jus, confiture, dessert sucré", e:{sucre:-12, chol:-2}},
@@ -123,10 +293,6 @@ const MOINS = [
   {id:"alcool", l:"Verre d’alcool", e:{sucre:-5, chol:-2, reins:-4}}
 ];
 const AVOCAT = {0:{}, 0.5:{chol:3}, 1:{chol:2, sucre:-4}};
-const NEGTOG = [
-  {id:"bicarb", l:"Bicarbonate de soude", s:"très salé (sodium)", e:{reins:-12}},
-  {id:"ains", l:"Anti-inflammatoire", s:"ibuprofène, Advil, Nurofen…", e:{reins:-20}}
-];
 
 const LABS = [
   {id:"ldl", l:"LDL-cholestérol", u:"g/l", bas:true, cible:()=>S.ldl, ct:()=>"< "+S.ldl.toFixed(2).replace(".",",")},
@@ -150,7 +316,7 @@ function save(){ try{
 }catch(e){ alert("Impossible d’enregistrer sur cet appareil."); } }
 let D = load(K.days, {});
 let L = load(K.labs, []);
-let S = Object.assign({ldl:1.00, actif:210}, load(K.set, {}));
+let S = Object.assign({ldl:1.00, actif:210, kcal:2000, recents:[]}, load(K.set, {}));
 
 /* ---------- Outils ---------- */
 const pad = n => String(n).padStart(2,"0");
@@ -164,13 +330,28 @@ const fmtShort = s => parse(s).toLocaleDateString("fr-FR", {day:"2-digit", month
 const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-function blank(){ return {marche:0, piscine:0, autre:0, repas:[false,false,false], p:{}, m:{}, n:{}, avocat:0}; }
-function day(s){ return D[s] ? Object.assign(blank(), D[s]) : blank(); }
+function blank(){ return {marche:0, piscine:0, autre:0, repas:[false,false,false], p:{}, m:{}, n:{}, avocat:0, j:{}}; }
+function day(s){ return D[s] ? Object.assign(blank(), JSON.parse(JSON.stringify(D[s]))) : blank(); }
+function hasJournal(x){ return !!(x && x.j && Object.values(x.j).some(a => a && a.length)); }
 function hasData(x){
   if(!x) return false;
   if(x.marche||x.piscine||x.autre||x.avocat) return true;
   if((x.repas||[]).some(Boolean)) return true;
+  if(hasJournal(x)) return true;
   return [x.p,x.m,x.n].some(o => o && Object.values(o).some(Boolean));
+}
+function nutr(f, g){ const k = g/100; const r = {}; ["kcal","prot","gluc","suc","fib","lip","ags","sel"].forEach(n => r[n] = f[n]*k); return r; }
+function totals(x, meal){
+  const t = {kcal:0, prot:0, gluc:0, suc:0, fib:0, lip:0, ags:0, sel:0, igGluc:0, o3:0, verres:0};
+  const meals = meal ? [meal] : Object.keys(x.j||{});
+  meals.forEach(m => (x.j[m]||[]).forEach(it => {
+    const f = FOODS[it.f]; if(!f) return;
+    const n = nutr(f, it.g); for(const k in n) t[k] += n[k];
+    if(f.o.ig) t.igGluc += n.gluc*f.o.ig;
+    if(f.o.o3) t.o3 += it.g;
+    if(f.o.alc) t.verres += it.g/f.o.alc;
+  }));
+  return t;
 }
 
 /* ---------- Score ---------- */
@@ -182,12 +363,26 @@ function contributions(x){
   if(w>0) out.push({k:"activite", l:"Activité physique", e:{sucre:30*f, chol:12*f, reins:12*f}});
   const nr = (x.repas||[]).filter(Boolean).length;
   if(nr) out.push({k:"repas", l:"Marche après les repas", e:{sucre:4*nr}});
+  AUTRES.forEach(it => { const [a,k] = it.p.split("."); if(x[a] && x[a][k]) out.push({k:k, l:it.l, e:it.e}); });
+  if(hasJournal(x)){
+    // Journal des repas : calcul à partir des quantités
+    const t = totals(x);
+    const fb = Math.min(t.fib, LIM.fib)/LIM.fib;
+    if(fb>0) out.push({k:"j_fib", l:"Fibres ("+Math.round(t.fib)+" g)", e:{sucre:12*fb, chol:8*fb}});
+    if(t.o3>0) { const o = Math.min(t.o3/80, 1); out.push({k:"j_o3", l:"Poisson gras (oméga-3)", e:{chol:10*o, sucre:3*o}}); }
+    if(t.suc>LIM.suc) out.push({k:"j_suc", l:"Sucres ("+Math.round(t.suc)+" g)", e:{sucre:-(t.suc-LIM.suc)*0.5}});
+    if(t.igGluc>60) out.push({k:"j_ig", l:"Pain blanc, riz, pommes de terre, sucreries", e:{sucre:-(t.igGluc-60)*0.25}});
+    if(t.kcal>S.kcal) { const d = (t.kcal-S.kcal)/100; out.push({k:"j_kcal", l:"Calories en trop ("+Math.round(t.kcal)+" kcal)", e:{sucre:-3*d, chol:-1*d}}); }
+    if(t.ags>LIM.ags) out.push({k:"j_ags", l:"Graisses saturées ("+Math.round(t.ags)+" g)", e:{chol:-(t.ags-LIM.ags)*1.2}});
+    if(t.sel>LIM.sel) out.push({k:"j_sel", l:"Sel ("+fmt(t.sel,1)+" g)", e:{reins:-(t.sel-LIM.sel)*4}});
+    if(t.verres>0) { const v = t.verres; out.push({k:"j_alc", l:"Alcool", e:{sucre:-5*v, chol:-2*v, reins:-4*v}}); }
+    return out;
+  }
   PLUS.forEach(it => { if(x.p[it.id]) out.push({k:it.id, l:it.l, e:it.e}); });
   MOINS.forEach(it => {
     const n = Math.max(0, (x.m[it.id]||0) - (it.free||0));
     if(n){ const e = {}; for(const a in it.e) e[a] = it.e[a]*n; out.push({k:it.id, l:it.l, e}); }
   });
-  NEGTOG.forEach(it => { if(x.n[it.id]) out.push({k:it.id, l:it.l, e:it.e}); });
   if(x.avocat) out.push({k:"avocat", l:x.avocat===1?"Avocat entier":"Demi-avocat", e:AVOCAT[x.avocat]});
   return out;
 }
@@ -214,7 +409,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => { tab = b
 
 function render(){
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.t===tab));
-  ({jour:rJour, bilan:rBilan, analyses:rAnalyses, reglages:rReglages})[tab]();
+  ({jour:rJour, repas:rRepas, bilan:rBilan, analyses:rAnalyses, reglages:rReglages})[tab]();
 }
 
 function stepper(path, v, step, unit=""){
@@ -222,15 +417,22 @@ function stepper(path, v, step, unit=""){
 }
 function tog(path, on, neg=false){ return `<button class="tog ${neg?"neg":""} ${on?"on":""}" data-tog="${path}" aria-pressed="${on}"></button>`; }
 
-function rJour(){
-  const x = day(cur), r = score(x), filled = hasData(D[cur]);
+function dateBar(){
   const isToday = cur===today();
-  app.innerHTML = `
-  <div class="card datebar">
+  return `<div class="card datebar">
     <button id="prev">‹</button>
     <div class="d">${isToday?"Aujourd’hui":esc(fmtDate(cur))}<div class="muted">${isToday?esc(fmtDate(cur)):""}</div></div>
     <button id="next" ${isToday?"disabled style='opacity:.3'":""}>›</button>
-  </div>
+  </div>`;
+}
+function bindDateBar(){
+  document.getElementById("prev").onclick = () => { cur = addDays(cur,-1); render(); };
+  document.getElementById("next").onclick = () => { if(cur<today()){ cur = addDays(cur,1); render(); } };
+}
+function rJour(){
+  const x = day(cur), r = score(x), filled = hasData(D[cur]), jr = hasJournal(x);
+  app.innerHTML = `
+  ${dateBar()}
 
   <div class="card">
     <h2>Score du jour</h2>
@@ -251,6 +453,14 @@ function rJour(){
   </div>
 
   <div class="card">
+    <h2>💧 Chaque jour</h2>
+    ${AUTRES.map(it=>{ const [a,k] = it.p.split("."); return `<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${tog(it.p, !!x[a][k], it.neg)}</div>`; }).join("")}
+  </div>
+
+  ${jr ? `<div class="tip" style="margin-bottom:12px">🍽️ Vos repas sont notés dans l’onglet <b>Repas</b> avec les quantités : c’est lui qui compte aujourd’hui. La liste rapide ci-dessous est ignorée.</div>`
+       : `<div class="tip" style="margin-bottom:12px">Liste rapide : cochez ce que vous avez mangé. Pour plus de précision (grammes, calories, sel), utilisez l’onglet <b>Repas</b>.</div>`}
+  <div class="${jr?"dim":""}">
+  <div class="card">
     <h2>✅ Ce qui aide</h2>
     ${PLUS.map(it=>`<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${tog("p."+it.id, !!x.p[it.id])}</div>`).join("")}
     <div class="row"><div class="lbl">Avocat<small>un demi suffit</small></div>
@@ -261,12 +471,11 @@ function rJour(){
     <h2>⚠️ Ce qui éloigne</h2>
     <p class="muted" style="margin:0 0 4px">Indiquez le nombre de fois dans la journée.</p>
     ${MOINS.map(it=>`<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${stepper("m."+it.id, x.m[it.id]||0, 1)}</div>`).join("")}
-    ${NEGTOG.map(it=>`<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${tog("n."+it.id, !!x.n[it.id], true)}</div>`).join("")}
+  </div>
   </div>
   ${filled?`<div class="card"><h2>Ce qui a compté aujourd’hui</h2>${factorList(contributions(x))}</div>`:""}`;
 
-  document.getElementById("prev").onclick = () => { cur = addDays(cur,-1); render(); };
-  document.getElementById("next").onclick = () => { if(cur<today()){ cur = addDays(cur,1); render(); } };
+  bindDateBar();
   bindDay();
 }
 
@@ -285,6 +494,116 @@ function bindDay(){
   app.querySelectorAll("[data-tog]").forEach(b => b.onclick = () => edit(x => { const [a,k] = b.dataset.tog.split("."); x[a][k] = !x[a][k]; }));
   app.querySelectorAll("[data-repas]").forEach(b => b.onclick = () => edit(x => { const i = +b.dataset.repas; x.repas = x.repas.slice(); x.repas[i] = !x.repas[i]; }));
   app.querySelectorAll("[data-avo]").forEach(b => b.onclick = () => edit(x => { x.avocat = Number(b.dataset.avo); }));
+}
+
+/* ---------- Journal des repas ---------- */
+function nutBar(label, v, lim, unit, dec=0, goodIfAbove=false){
+  const pct = Math.min(100, Math.round(v/lim*100));
+  const over = goodIfAbove ? false : v>lim;
+  return `<span>${label}</span><span><b>${fmt(v,dec)}</b> / ${goodIfAbove?"":"max "}${fmt(lim,0)} ${unit}</span><div class="bar ${over?"over":""}"><i style="width:${pct}%${goodIfAbove?";background:var(--good)":""}"></i></div>`;
+}
+function rRepas(){
+  const x = day(cur), t = totals(x);
+  app.innerHTML = `
+  ${dateBar()}
+  <div class="card">
+    <h2>Total de la journée</h2>
+    <div class="nut">
+      ${nutBar("Calories", t.kcal, S.kcal, "kcal")}
+      ${nutBar("Sucres", t.suc, LIM.suc, "g")}
+      ${nutBar("Graisses saturées", t.ags, LIM.ags, "g")}
+      ${nutBar("Sel", t.sel, LIM.sel, "g", 1)}
+      ${nutBar("Fibres (objectif)", t.fib, LIM.fib, "g", 0, true)}
+    </div>
+    <p class="muted" style="margin:0">Protéines ${fmt(t.prot,0)} g · Glucides ${fmt(t.gluc,0)} g · Lipides ${fmt(t.lip,0)} g</p>
+  </div>
+  ${MEALS.map(([m,label]) => {
+    const items = x.j[m]||[], mt = totals(x, m);
+    return `<div class="card meal"><h2>${label}<small>${items.length?Math.round(mt.kcal)+" kcal":""}</small></h2>
+      ${items.map((it,i) => { const f = FOODS[it.f]; if(!f) return ""; const n = nutr(f,it.g);
+        return `<button class="item" data-edit="${m}:${i}"><span>${esc(f.n)}<small>${Math.round(it.g)} g · sucres ${fmt(n.suc,0)} g · sel ${fmt(n.sel,1)} g</small></span><span class="k">${Math.round(n.kcal)} kcal</span></button>`; }).join("")}
+      <button class="add" data-addm="${m}">+ Ajouter un aliment</button></div>`;
+  }).join("")}
+  <p class="muted">Valeurs moyennes approximatives, d’après les tables de composition françaises. Touchez un aliment pour changer la quantité ou le supprimer.</p>`;
+  bindDateBar();
+  app.querySelectorAll("[data-addm]").forEach(b => b.onclick = () => openSearch(b.dataset.addm));
+  app.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { const [m,i] = b.dataset.edit.split(":"); const it = day(cur).j[m][+i]; openQty(m, it.f, it.g, +i); });
+}
+
+const ov = document.getElementById("ov");
+const norm = s => s.toLowerCase().replace(/œ/g,"oe").replace(/æ/g,"ae").replace(/[’']/g," ").normalize("NFD").replace(/[̀-ͯ]/g,"");
+function closeOv(){ ov.classList.remove("on"); ov.innerHTML = ""; document.body.style.overflow = ""; }
+function openSearch(meal){
+  document.body.style.overflow = "hidden";
+  ov.innerHTML = `<div class="top"><input id="q" type="search" placeholder="Chercher un aliment…" autocomplete="off"><button id="ovx">Annuler</button></div><div class="body" id="res"></div>`;
+  ov.classList.add("on");
+  const q = document.getElementById("q"), res = document.getElementById("res");
+  const line = f => `<button class="item" data-f="${f.id}"><span>${esc(f.n)}<small>${f.por[0][0]} (${f.por[0][1]} g)</small></span><span class="k muted">${f.kcal} kcal/100 g</span></button>`;
+  const show = () => {
+    const s = norm(q.value.trim());
+    let html = "";
+    if(!s){
+      const rec = (S.recents||[]).map(id=>FOODS[id]).filter(Boolean);
+      if(rec.length) html += `<div class="cat">Récents</div>` + rec.map(line).join("");
+      let c = "";
+      FOODS_RAW.forEach(r => { const f = FOODS[r[0]]; if(f.c!==c){ c = f.c; html += `<div class="cat">${c}</div>`; } html += line(f); });
+    } else {
+      const words = s.split(/\s+/);
+      const hits = Object.values(FOODS).filter(f => { const t = norm(f.n+" "+f.c); return words.every(w => t.includes(w)); });
+      html = hits.length ? hits.map(line).join("") : `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou utilisez la liste rapide de l’onglet Aujourd’hui.</p>`;
+    }
+    res.innerHTML = html;
+    res.querySelectorAll("[data-f]").forEach(b => b.onclick = () => openQty(meal, b.dataset.f, FOODS[b.dataset.f].por[0][1], -1));
+  };
+  q.oninput = show; show();
+  document.getElementById("ovx").onclick = closeOv;
+  setTimeout(()=>q.focus(), 50);
+}
+function openQty(meal, fid, grams, idx){
+  const f = FOODS[fid]; let g = Math.round(grams);
+  document.body.style.overflow = "hidden";
+  ov.classList.add("on");
+  const draw = () => {
+    const n = nutr(f, g);
+    ov.innerHTML = `<div class="top"><button id="ovb">‹ Retour</button><b style="flex:1;text-align:center">${MEALS.find(m=>m[0]===meal)[1]}</b><button id="ovx">Fermer</button></div>
+    <div class="body">
+      <div class="card" style="margin-top:12px">
+        <h2>${esc(f.n)}</h2>
+        <div class="chips" style="flex-wrap:wrap">${f.por.map(([l,pg])=>`<button class="chip ${pg===g?"on":""}" data-pg="${pg}">${l}</button>`).join("")}</div>
+        <div class="qty"><button data-dg="-10">−</button><input id="gin" type="number" inputmode="numeric" value="${g}"><span>g</span><button data-dg="10">+</button></div>
+        <div class="nut">
+          <span>Calories</span><b>${Math.round(n.kcal)} kcal</b>
+          <span>Sucres</span><b>${fmt(n.suc,1)} g</b>
+          <span>Graisses saturées</span><b>${fmt(n.ags,1)} g</b>
+          <span>Sel</span><b>${fmt(n.sel,2)} g</b>
+          <span>Fibres</span><b>${fmt(n.fib,1)} g</b>
+          <span>Protéines</span><b>${fmt(n.prot,1)} g</b>
+        </div>
+        <button class="btn" id="ok">${idx>=0?"Enregistrer":"Ajouter"}</button>
+        ${idx>=0?`<button class="btn danger" id="del">Supprimer</button>`:""}
+      </div>
+    </div>`;
+    ov.querySelectorAll("[data-pg]").forEach(b => b.onclick = () => { g = +b.dataset.pg; draw(); });
+    ov.querySelectorAll("[data-dg]").forEach(b => b.onclick = () => { g = Math.max(0, g + +b.dataset.dg); draw(); });
+    const gin = document.getElementById("gin");
+    gin.onchange = () => { const v = parseFloat(gin.value.replace(",",".")); if(v>=0){ g = Math.round(v); draw(); } };
+    document.getElementById("ovb").onclick = () => idx>=0 ? closeOv() : openSearch(meal);
+    document.getElementById("ovx").onclick = closeOv;
+    document.getElementById("ok").onclick = () => {
+      const v = parseFloat(gin.value.replace(",",".")); if(v>=0) g = Math.round(v);
+      if(!g){ alert("Indiquez une quantité."); return; }
+      editJ(x => { x.j[meal] = x.j[meal]||[]; if(idx>=0) x.j[meal][idx] = {f:fid, g}; else x.j[meal].push({f:fid, g}); });
+      S.recents = [fid].concat((S.recents||[]).filter(id=>id!==fid)).slice(0,8); save();
+      closeOv(); render();
+    };
+    if(idx>=0) document.getElementById("del").onclick = () => { editJ(x => { x.j[meal].splice(idx,1); }); closeOv(); render(); };
+  };
+  draw();
+}
+function editJ(fn){
+  const x = day(cur); x.j = x.j||{}; fn(x);
+  if(hasData(x)) D[cur] = x; else delete D[cur];
+  save();
 }
 
 function factorList(list){
@@ -311,10 +630,11 @@ function rBilan(){
   let min = 0, marche = 0, piscine = 0, repas = 0; const agg = {};
   for(let i=0;i<7;i++){ const s = addDays(t,-i); if(!D[s]) continue; const x = day(s);
     min += x.marche+x.piscine+x.autre; marche += x.marche; piscine += x.piscine; repas += x.repas.filter(Boolean).length;
-    contributions(x).forEach(c => { if(!agg[c.k]) agg[c.k] = {l:c.l.replace(/^Demi-avocat|^Avocat entier/,"Avocat"), e:{}}; for(const k in c.e) agg[c.k].e[k] = (agg[c.k].e[k]||0)+c.e[k]; });
+    contributions(x).forEach(c => { if(!agg[c.k]) agg[c.k] = {l:c.l.replace(/^Demi-avocat|^Avocat entier/,"Avocat").replace(/ \([^)]*\)$/,""), e:{}}; for(const k in c.e) agg[c.k].e[k] = (agg[c.k].e[k]||0)+c.e[k]; });
   }
   const pct = Math.min(100, Math.round(min/S.actif*100));
   app.innerHTML = `
+  ${objCard(agg, a, b)}
   <div class="card">
     <h2>Les 7 derniers jours</h2>
     ${verdict(a&&a.global, b&&b.global, "globale")}
@@ -344,6 +664,41 @@ function rBilan(){
   </div>
 
   <div class="tip">Ce score mesure vos <b>habitudes</b>, pas votre sang. Seule la prise de sang dit si le cholestérol ou le sucre ont vraiment bougé : voir l’onglet Analyses.</div>`;
+}
+
+/* ---------- Carte « Mes objectifs » ---------- */
+function lastLab(id){
+  const v = L.filter(e => e[id]!=null && e[id]!=="").sort((x,y)=>x.date<y.date?-1:1);
+  return v.length ? {v:v[v.length-1][id], date:v[v.length-1].date} : null;
+}
+function objCard(agg, a, b){
+  const blocs = [
+    {axe:"sucre", titre:"🟠 Diabète", labs:[["homa","HOMA",2.4,1],["hba1c","Hémoglobine glyquée",6.0,1],["gly","Glycémie",1.10,2]]},
+    {axe:"chol", titre:"🟣 Cholestérol", labs:[["ldl","LDL",S.ldl,2]]}
+  ];
+  const html = blocs.map(bl => {
+    const labs = bl.labs.map(([id,l,c,dec]) => {
+      const r = lastLab(id); if(!r) return "";
+      const ok = r.v < c;
+      return `<div class="row"><div class="lbl">${l}<small>mesuré le ${fmtShort(r.date)}</small></div>
+        <div style="text-align:right"><b>${fmt(r.v,dec)}</b> → cible &lt; ${c.toFixed(dec).replace(".",",")}<br>
+        <span class="${ok?"up":"down"}" style="font-size:14px">${ok?"✅ atteint":"encore "+fmt(r.v-c,dec)+" à gagner"}</span></div></div>`;
+    }).join("") || `<p class="muted">Ajoutez vos résultats dans l’onglet Analyses.</p>`;
+    const sc = a ? Math.round(a[bl.axe]) : null;
+    const d = (a && b) ? a[bl.axe]-b[bl.axe] : 0;
+    const tr = !a ? "" : !b ? "" : d>3 ? `<span class="up">↗ en progrès</span>` : d<-3 ? `<span class="down">↘ en recul</span>` : `<span class="muted">→ stable</span>`;
+    const facts = Object.values(agg).map(f => ({l:f.l, v:f.e[bl.axe]||0})).filter(f => Math.abs(f.v)>=1);
+    const pos = facts.filter(f=>f.v>0).sort((x,y)=>y.v-x.v).slice(0,3);
+    const neg = facts.filter(f=>f.v<0).sort((x,y)=>x.v-y.v).slice(0,3);
+    return `<h3 style="color:${AXES[bl.axe].col};text-transform:none;font-size:17px;letter-spacing:0">${bl.titre}</h3>
+      ${labs}
+      <div class="row"><div class="lbl">Vos habitudes (7 jours)</div><div style="text-align:right">${sc!=null?`<b>${sc}</b>/100 `+tr:`<span class="muted">pas de données</span>`}</div></div>
+      ${pos.length?`<div class="muted" style="margin-top:6px">👍 <b style="color:var(--good)">Aide :</b> ${pos.map(f=>esc(f.l)).join(", ")}</div>`:""}
+      ${neg.length?`<div class="muted" style="margin-top:4px">👎 <b style="color:var(--bad)">Freine :</b> ${neg.map(f=>esc(f.l)).join(", ")}</div>`:""}`;
+  }).join("");
+  const last = L.map(e=>e.date).sort().pop();
+  return `<div class="card"><h2>🎯 Mes objectifs</h2>${html}
+    ${last?`<p class="muted" style="margin:12px 0 0">Prochaine prise de sang conseillée vers le <b>${fmtShort(addDays(last,90))}</b> pour vérifier les progrès.</p>`:""}</div>`;
 }
 
 function chart(){
@@ -419,6 +774,8 @@ function rReglages(){
       <select id="sldl">${[[1.16,"< 1,16 (faible)"],[1.00,"< 1,00 (modéré)"],[0.70,"< 0,70 (élevé)"],[0.55,"< 0,55 (très élevé)"]].map(([v,t])=>`<option value="${v}" ${S.ldl===v?"selected":""}>${t}</option>`).join("")}</select></label>
     <p class="muted" style="margin:0">À confirmer avec votre médecin selon votre risque cardiovasculaire.</p>
     <label class="f">Activité par semaine (min) <input type="number" inputmode="numeric" id="sact" value="${S.actif}"></label>
+    <label class="f">Calories par jour (kcal) <input type="number" inputmode="numeric" id="skcal" value="${S.kcal}"></label>
+    <p class="muted" style="margin:0">Repère moyen pour un homme de 75 ans peu actif : 1 800 à 2 200 kcal. L’infirmière Asalée peut vous donner le bon chiffre.</p>
   </div>
   <div class="card">
     <h2>Sauvegarde</h2>
@@ -431,10 +788,12 @@ function rReglages(){
     <h2>Comment est calculé le score ?</h2>
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Sucre, Cholestérol et Reins. L’activité compte surtout pour le sucre ; les graisses animales pour le cholestérol ; le sel, l’eau, le bicarbonate et les anti-inflammatoires pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin ou de l’infirmière Asalée.</p>
-    <p class="muted">Version 1</p>
+    <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres, graisses saturées, sel, fibres et poisson gras. Sinon, c’est la liste rapide qui compte.</p>
+    <p class="muted">Version 3</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
+  document.getElementById("skcal").onchange = e => { const v = parseInt(e.target.value); if(v>=1000){ S.kcal = v; save(); } };
   document.getElementById("exp").onclick = exporter;
   document.getElementById("imp").onclick = () => document.getElementById("fileIn").click();
   document.getElementById("rst").onclick = () => { if(confirm("Effacer toutes les données de l’application ?") && confirm("Vraiment tout effacer ?")){ D = {}; L = []; save(); render(); } };
