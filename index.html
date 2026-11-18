@@ -294,8 +294,8 @@ const FOODS_RAW = [
  ["sucre","Sucre","Sucré",400,0,100,100,0,0,0,0,[["1 morceau",5],["2 morceaux",10]],{ig:1}],
  ["confiture","Confiture","Sucré",240,0.4,58,55,1,0.1,0,0,[["1 c. à soupe",20]],{ig:1}],
  ["miel","Miel","Sucré",320,0.4,80,80,0,0,0,0,[["1 c. à café",10]],{ig:1}],
- ["choc_n","Chocolat noir 70 %","Sucré",570,8,33,28,11,41,25,0,[["2 carrés",10],["4 carrés",20]],{}],
- ["choc_l","Chocolat au lait","Sucré",550,7,55,52,2,32,20,0.25,[["2 carrés",10],["4 carrés",20]],{}],
+ ["choc_n","Chocolat noir (70 à 85 %)","Sucré",580,9,30,24,12,44,26,0,[["1 carré",5],["2 carrés",10],["4 carrés",20]],{}],
+ ["choc_l","Chocolat au lait","Sucré",550,7,55,52,2,32,20,0.25,[["1 carré",5],["2 carrés",10],["4 carrés",20]],{}],
  ["croissant","Croissant","Sucré",410,8,45,8,2.5,21,13,1,[["1 croissant",60]],{ig:1}],
  ["painchoc","Pain au chocolat","Sucré",420,8,48,12,3,21,13,0.9,[["1 pain au chocolat",70]],{ig:1}],
  ["biscuits","Biscuits secs","Sucré",450,7,74,24,2.5,13,7,0.9,[["1 biscuit",8],["4 biscuits",32]],{ig:1}],
@@ -411,16 +411,33 @@ function hasData(x){
   return [x.p,x.m,x.n].some(o => o && Object.values(o).some(Boolean));
 }
 function nutr(f, g){ const k = g/100; const r = {}; ["kcal","prot","gluc","suc","fib","lip","ags","sel"].forEach(n => r[n] = f[n]*k); return r; }
+/* Ordre des aliments : légumes (fibres) et protéines/graisses mangés AVANT le sucré
+   ralentissent l'arrivée du sucre dans le sang (≈ −30 % dans les études, Diabetes Care 2015). */
+const ORDRE = {fib:3, pl:10, plein:0.7, demi:0.85};
+function mealFactors(items){
+  let fib = 0, pl = 0;
+  return items.map(it => {
+    const f = FOODS[it.f]; if(!f) return 1;
+    const fac = (fib>=ORDRE.fib && pl>=ORDRE.pl) ? ORDRE.plein : (fib>=ORDRE.fib || pl>=ORDRE.pl) ? ORDRE.demi : 1;
+    const n = nutr(f, it.g); fib += n.fib; pl += n.prot + n.lip;
+    return fac;
+  });
+}
 function totals(x, meal){
-  const t = {kcal:0, prot:0, gluc:0, suc:0, fib:0, lip:0, ags:0, sel:0, igGluc:0, o3:0, verres:0};
+  const t = {kcal:0, prot:0, gluc:0, suc:0, fib:0, lip:0, ags:0, sel:0, igGluc:0, o3:0, verres:0, sucW:0, igW:0, by:{suc:{}, ags:{}, sel:{}, ig:{}, kcal:{}}};
+  const addBy = (k, name, v) => { if(v>0) t.by[k][name] = (t.by[k][name]||0) + v; };
   const meals = meal ? [meal] : Object.keys(x.j||{});
-  meals.forEach(m => (x.j[m]||[]).forEach(it => {
+  meals.forEach(m => { const facs = mealFactors(x.j[m]||[]); (x.j[m]||[]).forEach((it, i) => {
     const f = FOODS[it.f]; if(!f) return;
+    const fac = facs[i];
     const n = nutr(f, it.g); for(const k in n) t[k] += n[k];
-    if(f.o.ig) t.igGluc += n.gluc*f.o.ig;
+    if(f.o.ig){ t.igGluc += n.gluc*f.o.ig; t.igW += n.gluc*f.o.ig*fac; }
+    t.sucW += n.suc*fac;
+    const nm = f.n.replace(/ \(.*\)$/,"").replace(/ \/.*$/,"");
+    addBy("suc", nm, n.suc); addBy("ags", nm, n.ags); addBy("sel", nm, n.sel); addBy("kcal", nm, n.kcal); if(f.o.ig) addBy("ig", nm, n.gluc*f.o.ig);
     if(f.o.o3) t.o3 += it.g;
     if(f.o.alc) t.verres += it.g/f.o.alc;
-  }));
+  }); });
   return t;
 }
 
@@ -434,7 +451,7 @@ function contributions(x){
   const nr = (x.repas||[]).filter(Boolean).length;
   if(nr) out.push({k:"repas", l:"Marche après les repas", e:{sucre:4*nr}});
   const ml = eauMl(x);
-  if(ml>0) out.push({k:"eau", l:"Eau ("+fmt(ml/1000,2)+" L, "+Math.round(ml/S.eau*100)+" % de l’objectif)", e:{reins:eauEffet(ml)}});
+  if(ml>0) out.push({k:"eau", l:"Eau ("+fmt(ml/1000,2)+" L, "+Math.round(ml/S.eau*100)+" % de l’objectif)", e:{reins:eauEffet(ml)}, note: ml<S.eau ? "Vous avez bu moins que votre objectif ("+fmt(S.eau,0)+" ml)" : ""});
   AUTRES.forEach(it => { const [a,k] = it.p.split("."); if(x[a] && x[a][k]) out.push({k:k, l:it.l, e:it.e}); });
   if(hasJournal(x)){
     // Journal des repas : calcul à partir des quantités
@@ -442,11 +459,14 @@ function contributions(x){
     const fb = Math.min(t.fib, LIM.fib)/LIM.fib;
     if(fb>0) out.push({k:"j_fib", l:"Fibres ("+Math.round(t.fib)+" g)", e:{sucre:12*fb, chol:8*fb}});
     if(t.o3>0) { const o = Math.min(t.o3/80, 1); out.push({k:"j_o3", l:"Poisson gras (oméga-3)", e:{chol:10*o, sucre:3*o}}); }
-    if(t.suc>LIM.suc) out.push({k:"j_suc", l:"Sucres ("+Math.round(t.suc)+" g)", e:{sucre:-(t.suc-LIM.suc)*0.5}});
-    if(t.igGluc>60) out.push({k:"j_ig", l:"Pain blanc, riz, pommes de terre, sucreries", e:{sucre:-(t.igGluc-60)*0.25}});
-    if(t.kcal>S.kcal) { const d = (t.kcal-S.kcal)/100; out.push({k:"j_kcal", l:"Calories en trop ("+Math.round(t.kcal)+" kcal)", e:{sucre:-3*d, chol:-1*d}}); }
-    if(t.ags>LIM.ags) out.push({k:"j_ags", l:"Graisses saturées ("+Math.round(t.ags)+" g)", e:{chol:-(t.ags-LIM.ags)*1.2}});
-    if(t.sel>LIM.sel) out.push({k:"j_sel", l:"Sel ("+fmt(t.sel,1)+" g)", e:{reins:-(t.sel-LIM.sel)*4}});
+    const penS = v => Math.max(0, v-LIM.suc)*0.5, penI = v => Math.max(0, v-60)*0.25;
+    if(t.suc>LIM.suc) out.push({k:"j_suc", l:"Sucres ("+Math.round(t.suc)+" g)", e:{sucre:-penS(t.suc)}, src:t.by.suc, u:"g de sucre"});
+    if(t.igGluc>60) out.push({k:"j_ig", l:"Glucides rapides", e:{sucre:-penI(t.igGluc)}, src:t.by.ig, u:"g de glucides rapides"});
+    const gain = (penS(t.suc)-penS(t.sucW)) + (penI(t.igGluc)-penI(t.igW));
+    if(gain>0.5) out.push({k:"j_ordre", l:"Ordre du repas : légumes et protéines avant le sucré", e:{sucre:gain}});
+    if(t.kcal>S.kcal) { const d = (t.kcal-S.kcal)/100; out.push({k:"j_kcal", l:"Calories en trop ("+Math.round(t.kcal)+" kcal)", e:{sucre:-3*d, chol:-1*d}, src:t.by.kcal, u:"kcal"}); }
+    if(t.ags>LIM.ags) out.push({k:"j_ags", l:"Graisses saturées ("+Math.round(t.ags)+" g)", e:{chol:-(t.ags-LIM.ags)*1.2}, src:t.by.ags, u:"g de graisses saturées"});
+    if(t.sel>LIM.sel) out.push({k:"j_sel", l:"Sel ("+fmt(t.sel,1)+" g)", e:{reins:-(t.sel-LIM.sel)*4}, src:t.by.sel, u:"g de sel"});
     if(t.verres>0) { const v = t.verres; out.push({k:"j_alc", l:"Alcool", e:{sucre:-5*v, chol:-2*v, reins:-4*v}}); }
     return out;
   }
@@ -643,11 +663,13 @@ function rRepas(){
   ${MEALS.map(([m,label]) => {
     const items = x.j[m]||[], mt = totals(x, m);
     return `<div class="card meal"><h2>${label}<small>${items.length?Math.round(mt.kcal)+" kcal":""}</small></h2>
-      ${items.map((it,i) => { const f = FOODS[it.f]; if(!f) return ""; const n = nutr(f,it.g);
-        return `<button class="item" data-edit="${m}:${i}"><span>${esc(f.n)}<small>${Math.round(it.g)} g · sucres ${fmt(n.suc,0)} g · sel ${fmt(n.sel,1)} g</small></span><span class="k">${Math.round(n.kcal)} kcal</span></button>`; }).join("")}
+      ${(()=>{ const facs = mealFactors(items); return items.map((it,i) => { const f = FOODS[it.f]; if(!f) return ""; const n = nutr(f,it.g);
+        const ral = facs[i]<1 && (n.suc>=2 || (f.o.ig && n.gluc>=5));
+        return `<button class="item" data-edit="${m}:${i}"><span>${esc(f.n)}<small>${Math.round(it.g)} g · sucres ${fmt(n.suc,0)} g · sel ${fmt(n.sel,1)} g${ral?`<br><span style="color:var(--good)">🛡️ sucre ralenti ${facs[i]===ORDRE.plein?"(−30 %)":"(−15 %)"} par ce qui précède</span>`:""}</small></span><span class="k">${Math.round(n.kcal)} kcal</span></button>`; }).join(""); })()}
       <button class="add" data-addm="${m}">+ Ajouter un aliment</button>
       ${!items.length && lastMeal(m) ? `<button class="add" style="background:#fff" data-copym="${m}">↺ Reprendre celui ${esc(lastMeal(m).lbl)}</button>` : ""}</div>`;
   }).join("")}
+  <div class="tip">🛡️ <b>Ajoutez les aliments dans l’ordre où vous les mangez.</b> Les légumes puis les protéines (poisson, œuf, avocat…) mangés <b>avant</b> le sucré ralentissent l’arrivée du sucre dans le sang : l’app en tient compte.</div>
   <p class="muted">Valeurs moyennes approximatives, d’après les tables de composition françaises. Touchez un aliment pour changer la quantité ou le supprimer.</p>`;
   bindDateBar();
   app.querySelectorAll("[data-addm]").forEach(b => b.onclick = () => openSearch(b.dataset.addm));
@@ -686,6 +708,8 @@ function openSearch(meal){
 }
 function openQty(meal, fid, grams, idx){
   const f = FOODS[fid]; let g = Math.round(grams);
+  const up = f.por.find(([l]) => /^1 /.test(l));
+  const unit = up ? {nom: up[0].replace(/^1 /,""), g: up[1]} : null;
   document.body.style.overflow = "hidden";
   ov.classList.add("on");
   const draw = () => {
@@ -695,6 +719,9 @@ function openQty(meal, fid, grams, idx){
       <div class="card" style="margin-top:12px">
         <h2>${esc(f.n)}</h2>
         <div class="chips" style="flex-wrap:wrap">${f.por.map(([l,pg])=>`<button class="chip ${pg===g?"on":""}" data-pg="${pg}">${l}</button>`).join("")}</div>
+        ${unit ? `<div class="row" style="justify-content:center;gap:12px;border:0;padding-top:12px"><span>Nombre :</span>
+          <div class="stepper"><button data-du="-1">−</button><span class="v">${fmt(g/unit.g,1)}</span><button data-du="1">+</button></div>
+          <span class="muted">× ${esc(unit.nom)} (${unit.g} g)</span></div>` : ""}
         <div class="qty"><button data-dg="-10">−</button><input id="gin" type="number" inputmode="numeric" value="${g}"><span>g</span><button data-dg="10">+</button></div>
         <div class="nut">
           <span>Calories</span><b>${Math.round(n.kcal)} kcal</b>
@@ -705,10 +732,12 @@ function openQty(meal, fid, grams, idx){
           <span>Protéines</span><b>${fmt(n.prot,1)} g</b>
         </div>
         <button class="btn" id="ok">${idx>=0?"Enregistrer":"Ajouter"}</button>
-        ${idx>=0?`<button class="btn danger" id="del">Supprimer</button>`:""}
+        ${idx>=0?`<div style="display:flex;gap:8px;margin-top:10px"><button class="btn sec" id="mvUp" style="margin:0" ${idx===0?"disabled":""}>↑ Mangé plus tôt</button><button class="btn sec" id="mvDn" style="margin:0" ${idx>=(day(cur).j[meal]||[]).length-1?"disabled":""}>↓ Mangé plus tard</button></div>
+        <button class="btn danger" id="del">Supprimer</button>`:""}
       </div>
     </div>`;
     ov.querySelectorAll("[data-pg]").forEach(b => b.onclick = () => { g = +b.dataset.pg; draw(); });
+    ov.querySelectorAll("[data-du]").forEach(b => b.onclick = () => { const n = Math.max(0, Math.round(g/unit.g) + +b.dataset.du); g = n*unit.g; draw(); });
     ov.querySelectorAll("[data-dg]").forEach(b => b.onclick = () => { g = Math.max(0, g + +b.dataset.dg); draw(); });
     const gin = document.getElementById("gin");
     gin.onchange = () => { const v = parseFloat(gin.value.replace(",",".")); if(v>=0){ g = Math.round(v); draw(); } };
@@ -721,6 +750,8 @@ function openQty(meal, fid, grams, idx){
       S.recents = [fid].concat((S.recents||[]).filter(id=>id!==fid)).slice(0,8); save();
       closeOv(); render();
     };
+    const mv = d => { editJ(x => { const a = x.j[meal]; const j = idx+d; if(j<0||j>=a.length) return; [a[idx],a[j]] = [a[j],a[idx]]; }); closeOv(); render(); };
+    if(idx>=0){ document.getElementById("mvUp").onclick = () => mv(-1); document.getElementById("mvDn").onclick = () => mv(1); }
     if(idx>=0) document.getElementById("del").onclick = () => { editJ(x => { x.j[meal].splice(idx,1); }); closeOv(); render(); };
   };
   draw();
@@ -732,7 +763,15 @@ function editJ(fn){
 }
 
 function factorList(list){
-  const tot = list.map(c => ({l:c.l, v:Object.values(c.e).reduce((s,v)=>s+v,0), e:c.e})).filter(c=>Math.abs(c.v)>=0.5);
+  const tot = list.map(c => ({l:c.l, v:Object.values(c.e).reduce((s,v)=>s+v,0), e:c.e, src:c.src, u:c.u, note:c.note, parJour:c.parJour})).filter(c=>Math.abs(c.v)>=0.5);
+  const causes = c => {
+    if(!c.src) return c.note ? `<small style="color:var(--ink);margin-top:3px">👉 ${esc(c.note)}</small>` : "";
+    const arr = Object.entries(c.src).sort((a,b)=>b[1]-a[1]); const total = arr.reduce((t,x)=>t+x[1],0);
+    const top = arr.filter(x => x[1] >= total*0.08).slice(0,4);
+    if(!top.length) return "";
+    const dec = c.u==="g de sel" ? 1 : 0;
+    return `<small style="color:var(--ink);margin-top:3px">👉 Surtout : ${top.map(([n,v])=>`<b>${esc(n)}</b> (${fmt(v,dec)} ${c.u.split(" ")[0]})`).join(", ")}${c.parJour?" <span class='muted'>en moyenne par jour</span>":""}</small>`;
+  };
   const pos = tot.filter(c=>c.v>0).sort((a,b)=>b.v-a.v).slice(0,4);
   const neg = tot.filter(c=>c.v<0).sort((a,b)=>a.v-b.v).slice(0,4);
   const force = v => { const a = Math.abs(v); return a>=10 ? "●●●" : a>=4 ? "●●○" : "●○○"; };
@@ -740,7 +779,7 @@ function factorList(list){
   const line = c => {
     const ax = Object.keys(c.e).filter(a => Math.abs(c.e[a])>=1).sort((a,b)=>Math.abs(c.e[b])-Math.abs(c.e[a]));
     const good = c.v>0;
-    return `<div class="row"><div class="lbl">${esc(c.l)}<small>${good?"Bon pour":"Mauvais pour"} : ${ax.map(a=>`${NOMS[a]} <span style="color:${good?"var(--good)":"var(--bad)"};letter-spacing:1px">${force(c.e[a])}</span>`).join(" · ")}</small></div></div>`;
+    return `<div class="row"><div class="lbl">${esc(c.l)}<small>${good?"Bon pour":"Mauvais pour"} : ${ax.map(a=>`${NOMS[a]} <span style="color:${good?"var(--good)":"var(--bad)"};letter-spacing:1px">${force(c.e[a])}</span>`).join(" · ")}</small>${good?"":causes(c)}</div></div>`;
   };
   return `<p class="muted" style="margin:0">Effet : ●○○ léger · ●●○ moyen · ●●● fort</p>`
        + (pos.length?`<h3 style="color:var(--good)">Vous rapproche</h3>${pos.map(line).join("")}`:"")
@@ -762,7 +801,9 @@ function rBilan(){
   let min = 0, marche = 0, piscine = 0, repas = 0, km = 0; const agg = {};
   for(let i=0;i<7;i++){ const s = addDays(t,-i); if(!D[s]) continue; const x = day(s);
     min += x.marche+x.piscine+x.autre; marche += x.marche; km += x.marches.reduce((t,w)=>t+walkKm(w),0); piscine += x.piscine; repas += x.repas.filter(Boolean).length;
-    contributions(x).forEach(c => { if(!agg[c.k]) agg[c.k] = {l:c.l.replace(/^Demi-avocat|^Avocat entier/,"Avocat").replace(/ \([^)]*\)$/,""), e:{}}; for(const k in c.e) agg[c.k].e[k] = (agg[c.k].e[k]||0)+c.e[k]; });
+    contributions(x).forEach(c => { if(!agg[c.k]) agg[c.k] = {l:c.l.replace(/^Demi-avocat|^Avocat entier/,"Avocat").replace(/ \([^)]*\)$/,""), e:{}, u:c.u}; for(const k in c.e) agg[c.k].e[k] = (agg[c.k].e[k]||0)+c.e[k];
+      if(c.note) agg[c.k].note = c.k==="eau" ? "En dessous de votre objectif d’eau certains jours" : c.note;
+      if(c.src){ agg[c.k].src = agg[c.k].src||{}; for(const n in c.src) agg[c.k].src[n] = (agg[c.k].src[n]||0)+c.src[n]; } });
   }
   const pct = Math.min(100, Math.round(min/S.actif*100));
   app.innerHTML = `
@@ -793,7 +834,8 @@ function rBilan(){
 
   <div class="card">
     <h2>Ce qui a le plus compté cette semaine</h2>
-    ${Object.keys(agg).length ? factorList(Object.values(agg).map(f => { const e = {}; for(const k in f.e) e[k] = f.e[k]/(a?a.n:1); return {l:f.l, e}; })) + `<p class="muted" style="margin:8px 0 0">Effet moyen par jour sur la semaine.</p>` : `<p class="muted">Pas encore de données.</p>`}
+    ${Object.keys(agg).length ? factorList(Object.values(agg).map(f => { const n = a?a.n:1, e = {}; for(const k in f.e) e[k] = f.e[k]/n;
+      let src = null; if(f.src){ src = {}; for(const k in f.src) src[k] = f.src[k]/n; } return {l:f.l, e, src, u:f.u, note:f.note, parJour:true}; })) + `<p class="muted" style="margin:8px 0 0">Effet moyen par jour sur la semaine.</p>` : `<p class="muted">Pas encore de données.</p>`}
   </div>
 
   <div class="tip">Ce score mesure vos <b>habitudes</b>, pas votre sang. Seule la prise de sang dit si le cholestérol ou le sucre ont vraiment bougé : voir l’onglet Analyses.</div>`;
@@ -929,7 +971,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Sucre, Cholestérol et Reins. L’activité compte surtout pour le sucre ; les graisses animales pour le cholestérol ; le sel, l’eau, le bicarbonate et les anti-inflammatoires pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres, graisses saturées, sel, fibres et poisson gras. Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 13</p>
+    <p class="muted">Version 15</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
