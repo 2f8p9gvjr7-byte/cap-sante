@@ -381,7 +381,7 @@ function contributions(x){
   const out = [];
   const w = (x.marches||[]).reduce((t,m)=>t+walkMin(m)*INTENS[m.al||"n"],0) + x.piscine*1.3 + x.autre;
   const f = Math.min(w, 60)/60;
-  if(w>0) out.push({k:"activite", l:"Activité physique", e:{sucre:30*f, chol:12*f, reins:12*f}});
+  if(w>0) out.push({k:"activite", l:"Activité physique ("+Math.round((x.marches||[]).reduce((t,m)=>t+walkMin(m),0)+x.piscine+x.autre)+" min)", e:{sucre:30*f, chol:12*f, reins:12*f}});
   const nr = (x.repas||[]).filter(Boolean).length;
   if(nr) out.push({k:"repas", l:"Marche après les repas", e:{sucre:4*nr}});
   AUTRES.forEach(it => { const [a,k] = it.p.split("."); if(x[a] && x[a][k]) out.push({k:k, l:it.l, e:it.e}); });
@@ -668,10 +668,17 @@ function factorList(list){
   const tot = list.map(c => ({l:c.l, v:Object.values(c.e).reduce((s,v)=>s+v,0), e:c.e})).filter(c=>Math.abs(c.v)>=0.5);
   const pos = tot.filter(c=>c.v>0).sort((a,b)=>b.v-a.v).slice(0,4);
   const neg = tot.filter(c=>c.v<0).sort((a,b)=>a.v-b.v).slice(0,4);
-  const line = c => `<div class="row"><div class="lbl">${esc(c.l)}<small>${Object.keys(c.e).filter(a=>Math.round(c.e[a])).map(a=>AXES[a].nom+" "+(c.e[a]>0?"+":"")+Math.round(c.e[a])).join(" · ")}</small></div></div>`;
-  return (pos.length?`<h3 style="color:var(--good)">Vous rapproche</h3>${pos.map(line).join("")}`:"")
+  const force = v => { const a = Math.abs(v); return a>=10 ? "●●●" : a>=4 ? "●●○" : "●○○"; };
+  const NOMS = {sucre:"sucre", chol:"cholestérol", reins:"reins"};
+  const line = c => {
+    const ax = Object.keys(c.e).filter(a => Math.abs(c.e[a])>=1).sort((a,b)=>Math.abs(c.e[b])-Math.abs(c.e[a]));
+    const good = c.v>0;
+    return `<div class="row"><div class="lbl">${esc(c.l)}<small>${good?"Bon pour":"Mauvais pour"} : ${ax.map(a=>`${NOMS[a]} <span style="color:${good?"var(--good)":"var(--bad)"};letter-spacing:1px">${force(c.e[a])}</span>`).join(" · ")}</small></div></div>`;
+  };
+  return `<p class="muted" style="margin:0">Effet : ●○○ léger · ●●○ moyen · ●●● fort</p>`
+       + (pos.length?`<h3 style="color:var(--good)">Vous rapproche</h3>${pos.map(line).join("")}`:"")
        + (neg.length?`<h3 style="color:var(--bad)">Vous éloigne</h3>${neg.map(line).join("")}`:"")
-       || `<p class="muted">Rien de marquant.</p>`;
+       ;
 }
 
 function verdict(now, before, label){
@@ -700,7 +707,8 @@ function rBilan(){
         const d = b ? a[k]-b[k] : 0;
         const ar = !b ? "" : d>3 ? `<span class="up"> ↗</span>` : d<-3 ? `<span class="down"> ↘</span>` : " →";
         return `<div class="score"><b style="color:${AXES[k].col}">${Math.round(a[k])}${ar}</b><small>${AXES[k].nom}</small></div>`;}).join("")}</div>
-      <p class="muted" style="margin:8px 0 0">${a.n} jour${a.n>1?"s":""} renseigné${a.n>1?"s":""} sur 7. Objectif : 70 ou plus.</p>`:""}
+      <p class="muted" style="margin:8px 0 0">${a.n} jour${a.n>1?"s":""} renseigné${a.n>1?"s":""} sur 7.</p>
+      <div class="tip">📏 <b>Comment lire le score :</b> 100 = journée idéale, 50 = journée moyenne. <b>Au-dessus de 70</b>, vos habitudes vont dans le bon sens pour faire baisser la glycémie et le cholestérol.</div>`:""}
   </div>
 
   <div class="card">
@@ -711,14 +719,14 @@ function rBilan(){
   </div>
 
   <div class="card">
-    <h2>Évolution sur 30 jours</h2>
+    <h2>Évolution de vos scores</h2>
     ${chart()}
-    <div class="legend">${Object.keys(AXES).map(k=>`<span><i style="background:${AXES[k].hex}"></i>${AXES[k].nom}</span>`).join("")}<span><i style="background:#94a3b8"></i>Objectif 70</span></div>
+    <div class="legend" ${Object.keys(D).filter(k=>k>addDays(today(),-30)&&hasData(D[k])).length<3?'style="display:none"':''}>${Object.keys(AXES).map(k=>`<span><i style="background:${AXES[k].hex}"></i>${AXES[k].nom}</span>`).join("")}<span><i style="background:#94a3b8"></i>Objectif 70</span></div>
   </div>
 
   <div class="card">
-    <h2>Ce qui a le plus compté</h2>
-    ${Object.keys(agg).length ? factorList(Object.values(agg)) : `<p class="muted">Pas encore de données.</p>`}
+    <h2>Ce qui a le plus compté cette semaine</h2>
+    ${Object.keys(agg).length ? factorList(Object.values(agg).map(f => { const e = {}; for(const k in f.e) e[k] = f.e[k]/(a?a.n:1); return {l:f.l, e}; })) + `<p class="muted" style="margin:8px 0 0">Effet moyen par jour sur la semaine.</p>` : `<p class="muted">Pas encore de données.</p>`}
   </div>
 
   <div class="tip">Ce score mesure vos <b>habitudes</b>, pas votre sang. Seule la prise de sang dit si le cholestérol ou le sucre ont vraiment bougé : voir l’onglet Analyses.</div>`;
@@ -762,14 +770,17 @@ function objCard(agg, a, b){
 function chart(){
   const W = 340, H = 170, P = {l:28, r:8, t:8, b:22};
   const t = today(), pts = {sucre:[], chol:[], reins:[]};
-  for(let i=29;i>=0;i--){ const s = addDays(t,-i); const x = 29-i;
+  const filled = Object.keys(D).filter(k => k<=t && hasData(D[k])).sort();
+  const nb = filled.filter(k => k>addDays(t,-30)).length;
+  if(nb<3) return `<p class="muted" style="margin:0">La courbe apparaîtra quand vous aurez rempli <b>au moins 3 jours</b> (${nb} pour l’instant). Elle montrera alors si vos scores montent vers l’objectif de 70.</p>`;
+  const N = Math.max(7, Math.min(30, Math.round((parse(t)-parse(filled.find(k=>k>addDays(t,-30))))/864e5)+1));
+  for(let i=N-1;i>=0;i--){ const s = addDays(t,-i); const x = N-1-i;
     if(hasData(D[s])){ const r = score(day(s)); for(const k in pts) pts[k].push([x, r[k]]); } }
-  const X = i => P.l + i*(W-P.l-P.r)/29, Y = v => P.t + (100-v)*(H-P.t-P.b)/100;
-  if(!pts.sucre.length) return `<p class="muted">Pas encore de données.</p>`;
+  const X = i => P.l + i*(W-P.l-P.r)/(N-1), Y = v => P.t + (100-v)*(H-P.t-P.b)/100;
   let g = "";
   [0,50,100].forEach(v => g += `<line x1="${P.l}" x2="${W-P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e2e8e6"/><text x="${P.l-5}" y="${Y(v)+4}" font-size="10" text-anchor="end" fill="#5f6b76">${v}</text>`);
   g += `<line x1="${P.l}" x2="${W-P.r}" y1="${Y(70)}" y2="${Y(70)}" stroke="#94a3b8" stroke-dasharray="4 3"/>`;
-  [[0,addDays(t,-29)],[29,t]].forEach(([i,s],j)=> g += `<text x="${X(i)}" y="${H-6}" font-size="10" fill="#5f6b76" text-anchor="${j?"end":"start"}">${parse(s).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</text>`);
+  [[0,addDays(t,-(N-1))],[N-1,t]].forEach(([i,s],j)=> g += `<text x="${X(i)}" y="${H-6}" font-size="10" fill="#5f6b76" text-anchor="${j?"end":"start"}">${parse(s).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</text>`);
   for(const k in pts){
     const p = pts[k]; if(!p.length) continue;
     g += `<polyline fill="none" stroke="${AXES[k].hex}" stroke-width="2" stroke-linejoin="round" points="${p.map(([x,v])=>X(x)+","+Y(v)).join(" ")}"/>`;
@@ -847,7 +858,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Sucre, Cholestérol et Reins. L’activité compte surtout pour le sucre ; les graisses animales pour le cholestérol ; le sel, l’eau, le bicarbonate et les anti-inflammatoires pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin ou de l’infirmière Asalée.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres, graisses saturées, sel, fibres et poisson gras. Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 6</p>
+    <p class="muted">Version 7</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
