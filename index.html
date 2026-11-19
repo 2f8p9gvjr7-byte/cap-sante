@@ -1032,9 +1032,8 @@ function objCard(agg, a, b){
     const labs = bl.labs.map(([id,l,c,dec]) => {
       const r = lastLab(id); if(!r) return "";
       const ok = r.v < c;
-      return `<div class="row"><div class="lbl">${l}<small>mesuré le ${fmtShort(r.date)}</small></div>
-        <div style="text-align:right"><b>${fmt(r.v,dec)}</b> → cible &lt; ${c.toFixed(dec).replace(".",",")}<br>
-        <span class="${ok?"up":"down"}" style="font-size:14px">${ok?"✅ atteint":"encore "+fmt(r.v-c,dec)+" à gagner"}</span></div></div>`;
+      return `<div class="row"><div class="lbl">${l}<small>prise de sang du ${fmtShort(r.date)}</small></div>
+        <div style="text-align:right"><b>${fmt(r.v,dec)}</b><br><span class="muted" style="font-size:14px">cible &lt; ${c.toFixed(dec).replace(".",",")}</span></div></div>`;
     }).join("") || `<p class="muted">Ajoutez vos résultats dans l’onglet Analyses.</p>`;
     const sc = a ? Math.round(a[bl.axe]) : null;
     const d = (a && b) ? a[bl.axe]-b[bl.axe] : 0;
@@ -1148,7 +1147,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 27</p>
+    <p class="muted">Version 29</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
