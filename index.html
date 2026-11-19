@@ -715,6 +715,29 @@ function detail(x, axe){
   });
   return Object.entries(pts).map(([n,v]) => ({n, v, r: Object.entries(raisons[n]||{}).filter(([,w])=>Math.abs(w)>=0.05)})).sort((a,b)=>b.v-a.v);
 }
+/* Repères affichés même quand ils ne coûtent aucun point */
+function reperes(x, axe){
+  const out = [], jr = hasJournal(x), t = jr ? totals(x) : null;
+  const g = (v,d=0) => fmt(v,d)+" g";
+  if(axe==="reins"){
+    const ml = eauMl(x);
+    out.push(["Eau", ml ? fmt(ml,0)+" ml / objectif "+fmt(S.eau,0)+" ml "+(ml>=S.eau?"✅":"(sous l’objectif)") : "pas encore saisie : notez-la dans Aujourd’hui → Eau", ml ? ml>=S.eau : null]);
+    if(jr) out.push(["Sel", g(t.sel,1)+" / repère 6 g "+(t.sel<=LIM.sel?"✅":"(dépassé)"), t.sel<=LIM.sel]);
+    if(!(x.med||[]).some(m => MEDMAP[m.id] && Object.keys(MEDMAP[m.id].e).length)) out.push(["Médicaments qui fatiguent les reins", "aucun ✅", true]);
+  }
+  if(axe==="sucre" && jr){
+    out.push(["Sucres ajoutés", g(t.libW)+" / repère 25 g "+(t.libW<=LIM.lib?"✅":"(dépassé)"), t.libW<=LIM.lib]);
+    out.push(["Glucides rapides", g(t.igW)+" / repère 60 g "+(t.igW<=60?"✅":"(dépassé)"), t.igW<=60]);
+    out.push(["Calories", fmt(t.kcal,0)+" / "+fmt(S.kcal,0)+" kcal "+(t.kcal<=S.kcal?"✅":"(dépassé)"), t.kcal<=S.kcal]);
+  }
+  if(axe==="chol" && jr){
+    out.push(["Graisses saturées", g(t.ags)+" / repère 18 g "+(t.ags<=LIM.ags?"✅":"(dépassé)"), t.ags<=LIM.ags]);
+    out.push(["Poisson gras", t.o3>0 ? g(t.o3)+" / repère 80 g "+(t.o3>=80?"✅":"") : "aucun aujourd’hui", t.o3>=80 ? true : null]);
+    out.push(["Fibres", g(t.fib)+" / objectif 25 g "+(t.fib>=LIM.fib?"✅":""), t.fib>=LIM.fib ? true : null]);
+  }
+  if(!jr && axe!=="reins") out.push(["Repas", "notez-les dans l’onglet Repas pour le détail", null]);
+  return out;
+}
 function openDetail(axe){
   const x = day(cur), r = score(x), list = detail(x, axe);
   const somme = list.reduce((t,i)=>t+i.v,0), brut = BASE[axe]+somme;
@@ -730,6 +753,7 @@ function openDetail(axe){
     ${plus.length?`<h3 style="color:var(--good)">Font monter</h3>${plus.map(ligne).join("")}`:""}
     ${moins.length?`<h3 style="color:var(--bad)">Font baisser</h3>${moins.map(ligne).join("")}`:""}
     ${!list.length?`<p class="muted">Rien n’a encore modifié ce score aujourd’hui.</p>`:""}
+    ${(()=>{ const rp = reperes(x, axe); return rp.length ? `<h3>Repères du jour</h3>${rp.map(([l,v,ok])=>`<div class="row"><div class="lbl">${l}</div><span style="color:${ok===true?"var(--good)":ok===false?"var(--bad)":"var(--warn)"};text-align:right">${v}</span></div>`).join("")}` : ""; })()}
     <div class="row" style="border-top:2px solid var(--line);margin-top:6px"><div class="lbl"><b>Score du jour</b>
       ${brut>100||brut<0?`<small>${fmt(BASE[axe],0)} ${somme>=0?"+":"−"} ${Math.round(Math.abs(somme))} = ${Math.round(brut)}, ramené entre 0 et 100</small>`:`<small>${BASE[axe]} ${somme>=0?"+":"−"} ${fmt(Math.abs(somme),0)}</small>`}</div>
       <b style="font-size:22px;color:${n.c}">${r[axe]}</b></div>
@@ -1078,7 +1102,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 24</p>
+    <p class="muted">Version 25</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
