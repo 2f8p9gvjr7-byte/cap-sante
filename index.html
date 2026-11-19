@@ -97,6 +97,8 @@ th:first-child,td:first-child{text-align:left}
 .qty input{width:110px;font-size:26px;font-weight:700;text-align:center;padding:8px;border:1px solid var(--line);border-radius:12px}
 .qty button{width:52px;height:52px;border-radius:50%;border:1px solid var(--line);background:#fff;font-size:26px;color:var(--teal)}
 .dim{opacity:.45}
+.nutbtn{display:block;width:100%;border:0;background:none;padding:0;margin:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.nutbtn .nut{margin:0}
 .mrow{display:flex;align-items:center;gap:14px;width:100%;border:0;background:none;padding:8px 0;text-align:left;font:inherit;color:inherit}
 .bulle{flex:none;width:104px;height:104px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;text-shadow:0 1px 2px rgba(0,0,0,.25);box-shadow:0 6px 16px rgba(0,0,0,.12), inset 0 -6px 12px rgba(0,0,0,.08)}
 .bulle .ico{font-size:34px;line-height:1.1;text-shadow:none}
@@ -820,6 +822,37 @@ function openMeal(m){
   document.getElementById("ovx").onclick = () => { closeOv(); render(); };
   bindMeal(ov);
 }
+/* Lignes du total : d'où vient chaque nutriment */
+const NUTS = ["kcal","lib","ags","sel","fib"];
+const NUTDEF = {
+  kcal:{l:"Calories", u:"kcal", dec:0, lim:()=>S.kcal, tot:t=>t.kcal, val:(f,n)=>n.kcal},
+  lib:{l:"Sucres ajoutés", u:"g", dec:0, lim:()=>LIM.lib, tot:t=>t.lib, val:(f,n)=>n.suc*f.lib},
+  ags:{l:"Graisses saturées", u:"g", dec:0, lim:()=>LIM.ags, tot:t=>t.ags, val:(f,n)=>n.ags},
+  sel:{l:"Sel", u:"g", dec:1, lim:()=>LIM.sel, tot:t=>t.sel, val:(f,n)=>n.sel},
+  fib:{l:"Fibres (objectif)", u:"g", dec:0, lim:()=>LIM.fib, tot:t=>t.fib, val:(f,n)=>n.fib, obj:true}
+};
+function openNutri(k){
+  const d = NUTDEF[k], x = day(cur), t = totals(x), tot = d.tot(t), lim = d.lim();
+  const rows = [];
+  MEALS.forEach(([m,label]) => (x.j[m]||[]).forEach(it => { const f = FOODS[it.f]; if(!f) return; const v = d.val(f, nutr(f,it.g)); if(v>=0.05) rows.push({n:f.n, m:label, g:it.g, v}); }));
+  rows.sort((a,b)=>b.v-a.v);
+  const dec = d.dec || (k==="sel"?1:0);
+  const depasse = !d.obj && tot>lim;
+  document.body.style.overflow = "hidden";
+  ov.innerHTML = `<div class="top"><button id="ovx">‹ Repas</button><b style="flex:1;text-align:center">${d.l.replace(" (objectif)","")}</b><span style="width:60px"></span></div>
+  <div class="body"><div class="card" style="margin-top:12px">
+    <div class="row"><div class="lbl"><b>Total de la journée</b><small>${d.obj?"objectif":"maximum conseillé"} : ${fmt(lim,dec)} ${d.u}</small></div>
+      <b style="font-size:20px;color:${depasse?"var(--bad)":d.obj&&tot>=lim?"var(--good)":"var(--ink)"}">${fmt(tot,dec)} ${d.u}</b></div>
+    ${depasse?`<p style="margin:6px 0 0;color:var(--bad);font-weight:600">Dépassé de ${fmt(tot-lim,dec)} ${d.u}</p>`:""}
+    ${rows.length ? `<h3>${d.obj?"Ce qui en apporte le plus":"D’où ça vient"}</h3>` + rows.map(r => { const pct = tot>0 ? Math.round(r.v/tot*100) : 0;
+      return `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><span>${esc(r.n)}<small class="muted" style="display:block;font-size:13px">${esc(r.m.replace(/^\S+\s/,""))} · ${Math.round(r.g)} g</small></span>
+        <span style="text-align:right;white-space:nowrap"><b>${fmt(r.v, r.v<1 && d.u==="g" ? 1 : dec)} ${d.u}</b><small class="muted" style="display:block;font-size:13px">${pct} %</small></span></div>
+        <div class="bar" style="height:8px;margin:6px 0 0"><i style="width:${Math.min(100,pct)}%;background:${d.obj?"var(--good)":depasse?"var(--bad)":"var(--teal)"}"></i></div></div>`; }).join("")
+      : `<p class="muted">Aucun aliment noté aujourd’hui.</p>`}
+  </div></div>`;
+  ov.classList.add("on");
+  document.getElementById("ovx").onclick = () => { closeOv(); render(); };
+}
 function rRepas(){
   const x = day(cur), t = totals(x);
   app.innerHTML = `
@@ -837,18 +870,14 @@ function rRepas(){
   </div>
   <div class="card">
     <h2>Total de la journée</h2>
-    <div class="nut">
-      ${nutBar("Calories", t.kcal, S.kcal, "kcal")}
-      ${nutBar("Sucres ajoutés", t.lib, LIM.lib, "g")}
-      ${nutBar("Graisses saturées", t.ags, LIM.ags, "g")}
-      ${nutBar("Sel", t.sel, LIM.sel, "g", 1)}
-      ${nutBar("Fibres (objectif)", t.fib, LIM.fib, "g", 0, true)}
-    </div>
+    ${NUTS.map(k => `<button class="nutbtn" data-nut="${k}"><div class="nut">${nutBar(NUTDEF[k].l+" ›", NUTDEF[k].tot(t), NUTDEF[k].lim(), NUTDEF[k].u, NUTDEF[k].dec, !!NUTDEF[k].obj)}</div></button>`).join("")}
+    <p class="muted" style="margin:0 0 6px">👆 Touchez une ligne pour voir d’où ça vient.</p>
     <p class="muted" style="margin:0">Sucres au total ${fmt(t.suc,0)} g (dont fruits et laitages nature) · Protéines ${fmt(t.prot,0)} g · Glucides ${fmt(t.gluc,0)} g · Lipides ${fmt(t.lip,0)} g</p>
   </div>
   <p class="muted">Valeurs moyennes approximatives, d’après les tables de composition françaises.</p>`;
   bindDateBar();
   app.querySelectorAll("[data-meal]").forEach(b => b.onclick = () => openMeal(b.dataset.meal));
+  app.querySelectorAll("[data-nut]").forEach(b => b.onclick = () => openNutri(b.dataset.nut));
 }
 
 const ov = document.getElementById("ov");
@@ -1148,7 +1177,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 30</p>
+    <p class="muted">Version 31</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
