@@ -456,7 +456,7 @@ function mealFactors(items){
   });
 }
 function totals(x, meal){
-  const t = {kcal:0, prot:0, gluc:0, suc:0, fib:0, lip:0, ags:0, sel:0, igGluc:0, o3:0, verres:0, sucW:0, igW:0, lib:0, libW:0, by:{suc:{}, lib:{}, ags:{}, sel:{}, ig:{}, kcal:{}}};
+  const t = {kcal:0, prot:0, gluc:0, suc:0, fib:0, lip:0, ags:0, sel:0, igGluc:0, o3:0, verres:0, sucW:0, igW:0, lib:0, libW:0, by:{suc:{}, lib:{}, ags:{}, sel:{}, ig:{}, kcal:{}, fib:{}, o3:{}, libW:{}, igW:{}, alc:{}}};
   const addBy = (k, name, v) => { if(v>0) t.by[k][name] = (t.by[k][name]||0) + v; };
   const meals = meal ? [meal] : Object.keys(x.j||{});
   meals.forEach(m => { const facs = mealFactors(x.j[m]||[]); (x.j[m]||[]).forEach((it, i) => {
@@ -467,6 +467,8 @@ function totals(x, meal){
     t.sucW += n.suc*fac; t.lib += n.suc*f.lib; t.libW += n.suc*f.lib*fac;
     const nm = f.n.replace(/ \(.*\)$/,"").replace(/ \/.*$/,"");
     addBy("suc", nm, n.suc); addBy("lib", nm, n.suc*f.lib); addBy("ags", nm, n.ags); addBy("sel", nm, n.sel); addBy("kcal", nm, n.kcal); if(f.o.ig) addBy("ig", nm, n.gluc*f.o.ig);
+    addBy("fib", nm, n.fib); addBy("libW", nm, n.suc*f.lib*fac); if(f.o.ig) addBy("igW", nm, n.gluc*f.o.ig*fac);
+    if(f.o.o3) addBy("o3", nm, it.g*f.o.o3); if(f.o.alc) addBy("alc", nm, it.g/f.o.alc);
     if(f.o.o3) t.o3 += it.g*f.o.o3;
     if(f.o.alc) t.verres += it.g/f.o.alc;
   }); });
@@ -493,17 +495,17 @@ function contributions(x){
     // Journal des repas : calcul à partir des quantités
     const t = totals(x);
     const fb = Math.min(t.fib, LIM.fib)/LIM.fib;
-    if(fb>0) out.push({k:"j_fib", l:"Fibres ("+Math.round(t.fib)+" g)", e:{sucre:12*fb, chol:8*fb}});
-    if(t.o3>0) { const o = Math.min(t.o3/80, 1); out.push({k:"j_o3", l:"Poisson gras (oméga-3)", e:{chol:10*o, sucre:3*o}}); }
+    if(fb>0) out.push({k:"j_fib", l:"Fibres ("+Math.round(t.fib)+" g)", e:{sucre:12*fb, chol:8*fb}, dist:t.by.fib});
+    if(t.o3>0) { const o = Math.min(t.o3/80, 1); out.push({k:"j_o3", l:"Poisson gras (oméga-3)", e:{chol:10*o, sucre:3*o}, dist:t.by.o3}); }
     // Pénalités calculées APRÈS l'effet de l'ordre du repas (sucre ralenti = compte moins)
     const penL = v => Math.max(0, v-LIM.lib)*0.6, penI = v => Math.max(0, v-60)*0.25;
     const ralenti = (brut, net) => brut-net >= 0.5 ? "🛡️ "+fmt(brut-net,0)+" g ralentis par l’ordre du repas (déjà déduits)" : "";
-    if(penL(t.libW)>0) out.push({k:"j_suc", l:"Sucres ajoutés ("+Math.round(t.lib)+" g, repère "+LIM.lib+" g)", e:{sucre:-penL(t.libW)}, src:t.by.lib, u:"g de sucre ajouté", note:ralenti(t.lib,t.libW)});
-    if(penI(t.igW)>0) out.push({k:"j_ig", l:"Glucides rapides ("+Math.round(t.igGluc)+" g, repère 60 g)", e:{sucre:-penI(t.igW)}, src:t.by.ig, u:"g de glucides rapides", note:ralenti(t.igGluc,t.igW)});
-    if(t.kcal>S.kcal) { const d = (t.kcal-S.kcal)/100; out.push({k:"j_kcal", l:"Calories en trop ("+Math.round(t.kcal)+" kcal)", e:{sucre:-3*d, chol:-1*d}, src:t.by.kcal, u:"kcal"}); }
-    if(t.ags>LIM.ags) out.push({k:"j_ags", l:"Graisses saturées ("+Math.round(t.ags)+" g)", e:{chol:-(t.ags-LIM.ags)*1.2}, src:t.by.ags, u:"g de graisses saturées"});
-    if(t.sel>LIM.sel) out.push({k:"j_sel", l:"Sel ("+fmt(t.sel,1)+" g)", e:{reins:-(t.sel-LIM.sel)*4}, src:t.by.sel, u:"g de sel"});
-    if(t.verres>0) { const v = t.verres; out.push({k:"j_alc", l:"Alcool", e:{sucre:-5*v, chol:-2*v, reins:-4*v}}); }
+    if(penL(t.libW)>0) out.push({k:"j_suc", l:"Sucres ajoutés ("+Math.round(t.lib)+" g, repère "+LIM.lib+" g)", e:{sucre:-penL(t.libW)}, src:t.by.lib, dist:t.by.libW, u:"g de sucre ajouté", note:ralenti(t.lib,t.libW)});
+    if(penI(t.igW)>0) out.push({k:"j_ig", l:"Glucides rapides ("+Math.round(t.igGluc)+" g, repère 60 g)", e:{sucre:-penI(t.igW)}, src:t.by.ig, dist:t.by.igW, u:"g de glucides rapides", note:ralenti(t.igGluc,t.igW)});
+    if(t.kcal>S.kcal) { const d = (t.kcal-S.kcal)/100; out.push({k:"j_kcal", l:"Calories en trop ("+Math.round(t.kcal)+" kcal)", e:{sucre:-3*d, chol:-1*d}, src:t.by.kcal, dist:t.by.kcal, u:"kcal"}); }
+    if(t.ags>LIM.ags) out.push({k:"j_ags", l:"Graisses saturées ("+Math.round(t.ags)+" g)", e:{chol:-(t.ags-LIM.ags)*1.2}, src:t.by.ags, dist:t.by.ags, u:"g de graisses saturées"});
+    if(t.sel>LIM.sel) out.push({k:"j_sel", l:"Sel ("+fmt(t.sel,1)+" g)", e:{reins:-(t.sel-LIM.sel)*4}, src:t.by.sel, dist:t.by.sel, u:"g de sel"});
+    if(t.verres>0) { const v = t.verres; out.push({k:"j_alc", l:"Alcool", e:{sucre:-5*v, chol:-2*v, reins:-4*v}, dist:t.by.alc}); }
     return out;
   }
   PLUS.forEach(it => { if(x.p[it.id]) out.push({k:it.id, l:it.l, e:it.e}); });
@@ -568,8 +570,8 @@ function rJour(){
 
   <div class="card">
     <h2>Score du jour</h2>
-    ${filled ? `<div class="scores">${Object.keys(AXES).map(a=>{ const n = niveau(r[a]); return `<div class="score" style="background:${n.bg}"><b style="color:${n.c}">${r[a]}</b><small>${AXES[a].nom}<br><span style="color:${n.c};font-weight:600">${n.t}</span></small></div>`; }).join("")}</div>
-    <p class="muted" style="margin:8px 0 0">🟢 70 et plus : bien · 🟠 50 à 69 : moyen · 🔴 moins de 50 : à améliorer</p>
+    ${filled ? `<div class="scores">${Object.keys(AXES).map(a=>{ const n = niveau(r[a]); return `<div class="score" data-detail="${a}" style="background:${n.bg};cursor:pointer"><b style="color:${n.c}">${r[a]}</b><small>${AXES[a].nom}<br><span style="color:${n.c};font-weight:600">${n.t}</span></small></div>`; }).join("")}</div>
+    <p class="muted" style="margin:8px 0 0">🟢 70 et plus : bien · 🟠 50 à 69 : moyen · 🔴 moins de 50 : à améliorer<br>👆 <b>Touchez un score</b> pour voir le détail, aliment par aliment.</p>
     <p class="muted" style="margin:8px 0 0">Objectif : 70 ou plus sur chaque ligne. Score global : <b>${r.global}</b>/100</p>`
     : `<p class="muted" style="margin:0">Renseignez votre activité et vos repas ci-dessous.</p>`}
   </div>
@@ -646,6 +648,7 @@ function rJour(){
 
   bindDateBar();
   bindDay();
+  app.querySelectorAll("[data-detail]").forEach(b => b.onclick = () => openDetail(b.dataset.detail));
   const sq = document.getElementById("showQuick"); if(sq) sq.onclick = () => { quickOpen = !quickOpen; const y = window.scrollY; render(); window.scrollTo(0,y); };
 }
 
@@ -695,6 +698,45 @@ function bindDay(){
   app.querySelectorAll("[data-qw]").forEach(b => b.onclick = () => edit(x => { x.marches.push({min:+b.dataset.qw, al:"n"}); }));
   app.querySelectorAll("[data-delw]").forEach(b => b.onclick = () => edit(x => { x.marches.splice(+b.dataset.delw,1); }));
   app.querySelectorAll("[data-avo]").forEach(b => b.onclick = () => edit(x => { x.avocat = Number(b.dataset.avo); }));
+}
+
+/* ---------- Détail d'un score : points par aliment et par activité ---------- */
+function detail(x, axe){
+  const pts = {}, raisons = {};
+  const add = (nom, v, why) => { if(Math.abs(v)<0.05) return; pts[nom] = (pts[nom]||0) + v; if(why){ raisons[nom] = raisons[nom]||{}; raisons[nom][why] = (raisons[nom][why]||0) + v; } };
+  contributions(x).forEach(c => {
+    const v = (c.e||{})[axe]; if(!v) return;
+    const why = c.l.replace(/ \(.*\)$/,"").replace(/ ×\d+$/,"");
+    if(c.dist && Object.keys(c.dist).length){
+      const tot = Object.values(c.dist).reduce((a,b)=>a+b,0);
+      if(tot>0){ for(const n in c.dist) add(n, v*c.dist[n]/tot, why); return; }
+    }
+    add(c.l, v, "");
+  });
+  return Object.entries(pts).map(([n,v]) => ({n, v, r: Object.entries(raisons[n]||{}).filter(([,w])=>Math.abs(w)>=0.05)})).sort((a,b)=>b.v-a.v);
+}
+function openDetail(axe){
+  const x = day(cur), r = score(x), list = detail(x, axe);
+  const somme = list.reduce((t,i)=>t+i.v,0), brut = BASE[axe]+somme;
+  const pt = v => (v>0?"+":"−")+(Math.abs(v)<1 ? fmt(Math.abs(v),1) : Math.round(Math.abs(v)));
+  const ligne = i => `<div class="row"><div class="lbl">${esc(i.n)}${i.r.length>1 || (i.r.length===1 && i.r[0][0]!==i.n) ? `<small>${i.r.length===1 ? esc(i.r[0][0]) : i.r.map(([w,v])=>`${esc(w)} <span style="color:${v>0?"var(--good)":"var(--bad)"}">${pt(v)}</span>`).join(" · ")}</small>`:""}</div>
+      <b style="color:${i.v>0?"var(--good)":"var(--bad)"};white-space:nowrap">${pt(i.v)}</b></div>`;
+  const plus = list.filter(i=>i.v>0), moins = list.filter(i=>i.v<0).sort((a,b)=>a.v-b.v);
+  const n = niveau(r[axe]);
+  document.body.style.overflow = "hidden";
+  ov.innerHTML = `<div class="top"><b style="flex:1">${AXES[axe].nom} : ${r[axe]} / 100</b><button id="ovx">Fermer</button></div>
+  <div class="body"><div class="card" style="margin-top:12px">
+    <div class="row"><div class="lbl">Point de départ<small>journée moyenne</small></div><b>${BASE[axe]}</b></div>
+    ${plus.length?`<h3 style="color:var(--good)">Font monter</h3>${plus.map(ligne).join("")}`:""}
+    ${moins.length?`<h3 style="color:var(--bad)">Font baisser</h3>${moins.map(ligne).join("")}`:""}
+    ${!list.length?`<p class="muted">Rien n’a encore modifié ce score aujourd’hui.</p>`:""}
+    <div class="row" style="border-top:2px solid var(--line);margin-top:6px"><div class="lbl"><b>Score du jour</b>
+      ${brut>100||brut<0?`<small>${fmt(BASE[axe],0)} ${somme>=0?"+":"−"} ${Math.round(Math.abs(somme))} = ${Math.round(brut)}, ramené entre 0 et 100</small>`:`<small>${BASE[axe]} ${somme>=0?"+":"−"} ${fmt(Math.abs(somme),0)}</small>`}</div>
+      <b style="font-size:22px;color:${n.c}">${r[axe]}</b></div>
+    <p class="muted" style="margin:10px 0 0">Les points d’un aliment regroupent tout ce qu’il apporte (sucres, sel, graisses, fibres…), après l’effet de l’ordre du repas.</p>
+  </div></div>`;
+  ov.classList.add("on");
+  document.getElementById("ovx").onclick = closeOv;
 }
 
 /* ---------- Journal des repas ---------- */
@@ -1036,7 +1078,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 23</p>
+    <p class="muted">Version 24</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
