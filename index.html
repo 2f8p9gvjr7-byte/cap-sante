@@ -308,6 +308,19 @@ const FOODS_RAW = [
  ["gateau","Gâteau, pâtisserie","Sucré",380,5,50,30,1.5,18,10,0.5,[["1 part",80]],{ig:1}],
  ["porient","Pâtisserie orientale","Sucré",430,6,55,35,2.5,21,6,0.2,[["1 pièce",40]],{ig:1}],
  ["glace","Glace","Sucré",200,3.5,25,22,0.5,10,6,0.15,[["1 boule",50],["2 boules",100]],{}],
+ ["tarte_fine","Tarte fine aux pommes","Desserts",260,3,33,15,1.5,13,7,0.4,[["1 part",100]],{ig:1}],
+ ["tarte_fruits","Tarte aux fruits","Desserts",250,3.5,33,17,1.5,11,6,0.3,[["1 part",120]],{ig:1}],
+ ["tarte_citron","Tarte au citron meringuée","Desserts",330,4,45,32,0.5,15,7,0.3,[["1 part",100]],{ig:1}],
+ ["flan","Flan pâtissier","Desserts",160,4,24,15,0.3,5,3,0.2,[["1 part",120]],{ig:1}],
+ ["eclair","Éclair, chou à la crème","Desserts",260,5,30,18,0.8,13,7,0.3,[["1 éclair",80]],{ig:1}],
+ ["mousse_choc","Mousse au chocolat","Desserts",230,5,22,20,1.5,13,8,0.1,[["1 pot",100]],{}],
+ ["creme_brulee","Crème brûlée","Desserts",300,4,22,20,0,22,13,0.1,[["1 ramequin",100]],{}],
+ ["ile_flottante","Île flottante","Desserts",130,5,18,17,0,4,2,0.1,[["1 portion",150]],{}],
+ ["panna","Panna cotta","Desserts",220,3,20,18,0,14,9,0.1,[["1 pot",100]],{}],
+ ["clafoutis","Clafoutis","Desserts",180,5,25,15,1,7,4,0.2,[["1 part",120]],{ig:0.5}],
+ ["crepe","Crêpe sucrée","Desserts",220,6,30,10,1,8,3,0.3,[["1 crêpe",60],["2 crêpes",120]],{ig:1}],
+ ["beignet","Beignet","Desserts",350,6,45,15,1.5,17,6,0.5,[["1 beignet",60]],{ig:1}],
+ ["salade_fruits","Salade de fruits","Desserts",60,0.6,13,12,1.5,0.2,0,0,[["1 coupe",150]],{}],
  // Boissons
  ["jus","Jus d’orange","Boissons",45,0.7,10,9,0.2,0.1,0,0,[["1 verre",200]],{ig:1}],
  ["soda","Soda","Boissons",42,0,10.5,10.5,0,0,0,0.02,[["1 canette",330],["1 verre",200]],{ig:1}],
@@ -339,8 +352,8 @@ const LIM = {lib:25, ags:18, sel:6, fib:25};
 /* Sucres ajoutés (« sucres libres » selon l'OMS) : sucre, miel, confiture, sirops, jus, sodas, pâtisseries…
    Les sucres naturellement présents dans les fruits entiers et le lait nature n'en font pas partie.
    Repère OMS : moins de 50 g par jour, idéalement moins de 25 g. Valeur = part du sucre de l'aliment qui est ajoutée. */
-const LIBRE = {yaourt_s:0.6, compote_s:0.4, creme_d:0.8, riz_lait:0.7, cereales:1, muesli:0, ketchup:1, stomate:0.3, jus:1, soda:1, the_m:1, sandwich:0.5, burger:0.6, pizza:0.3};
-Object.values(FOODS).forEach(f => { f.lib = (f.id in LIBRE) ? LIBRE[f.id] : (f.c==="Sucré" ? 1 : 0); });
+const LIBRE = {tarte_fine:0.6, tarte_fruits:0.6, clafoutis:0.7, salade_fruits:0.3, yaourt_s:0.6, compote_s:0.4, creme_d:0.8, riz_lait:0.7, cereales:1, muesli:0, ketchup:1, stomate:0.3, jus:1, soda:1, the_m:1, sandwich:0.5, burger:0.6, pizza:0.3};
+Object.values(FOODS).forEach(f => { f.lib = (f.id in LIBRE) ? LIBRE[f.id] : ((f.c==="Sucré" || f.c==="Desserts") ? 1 : 0); });
 // Ce qui éloigne (compteurs). free = nombre « gratuit » avant pénalité
 const MOINS = [
   {id:"sucres", l:"Sucre rapide", s:"soda, jus, confiture, dessert sucré", e:{sucre:-12, chol:-2}},
@@ -1023,7 +1036,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 22</p>
+    <p class="muted">Version 23</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
