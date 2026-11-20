@@ -1200,40 +1200,57 @@ function rBilan(){
       if(c.src){ agg[c.k].src = agg[c.k].src||{}; for(const n in c.src) agg[c.k].src[n] = (agg[c.k].src[n]||0)+c.src[n]; } });
   }
   const pct = Math.min(100, Math.round(min/S.actif*100));
+  const etape = (n, t) => `<h3 style="margin:18px 4px 8px;text-transform:none;letter-spacing:0;font-size:16px;color:var(--teal)">${n} ${t}</h3>`;
+  // prise de sang : les gros chiffres
+  const LABS_TB = [["homa","HOMA",2.4,1],["hba1c","HbA1c",6.0,1],["gly","Glycémie",1.10,2],["ldl","LDL",S.ldl,2]].map(([id,l,c,dec]) => ({id,l,c,dec,r:lastLab(id)})).filter(z=>z.r);
+  const derniere = L.map(e=>e.date).sort().pop();
+  // ce qui aide / freine, par objectif
+  const resume = Object.keys(AXES).map(ax => {
+    const facts = Object.values(agg).map(f => ({l:f.l, v:f.e[ax]||0})).filter(f => Math.abs(f.v)>=1);
+    const pos = facts.filter(f=>f.v>0).sort((x,y)=>y.v-x.v).slice(0,3), neg = facts.filter(f=>f.v<0).sort((x,y)=>x.v-y.v).slice(0,3);
+    if(!pos.length && !neg.length) return "";
+    return `<div class="row" style="display:block"><b>${AXES[ax].nom}</b>
+      ${pos.length?`<div class="muted" style="margin-top:4px">👍 <b style="color:var(--good)">Aide :</b> ${pos.map(f=>esc(f.l)).join(", ")}</div>`:""}
+      ${neg.length?`<div class="muted" style="margin-top:2px">👎 <b style="color:var(--bad)">Freine :</b> ${neg.map(f=>esc(f.l)).join(", ")}</div>`:""}</div>`;
+  }).join("");
   app.innerHTML = `
-  ${objCard(agg, a, b)}
+  ${etape("①","La semaine en un coup d’œil")}
   <div class="card">
-    <h2>Les 7 derniers jours</h2>
-    ${verdict(a&&a.global, b&&b.global, "globale")}
-    ${a?`<div class="scores" style="margin-top:10px">${Object.keys(AXES).map(k=>{
+    ${a ? `<div class="scores">${Object.keys(AXES).map(k=>{
         const d = b ? a[k]-b[k] : 0;
         const ar = !b ? "" : d>3 ? `<span class="up"> ↗</span>` : d<-3 ? `<span class="down"> ↘</span>` : " →";
         const n = niveau(a[k]);
         return `<div class="score" data-detailw="${k}" style="background:${n.bg};cursor:pointer"><b style="color:${n.c}">${Math.round(a[k])}${ar}</b><small>${AXES[k].nom}<br><span style="color:${n.c};font-weight:600">${n.t}</span></small></div>`;}).join("")}</div>
-      <p class="muted" style="margin:8px 0 0">${a.n} jour${a.n>1?"s":""} renseigné${a.n>1?"s":""} sur 7. 👆 <b>Touchez un score</b> pour voir le détail.</p>
-      <div class="tip">📏 <b>Comment lire le score :</b> 100 = journée idéale, 50 = journée moyenne. <b>Au-dessus de 70</b>, vos habitudes vont dans le bon sens pour faire baisser la glycémie et le cholestérol.</div>`:""}
+      ${verdict(a.global, b&&b.global, "globale")}
+      <div style="display:flex;justify-content:space-between;margin-top:12px"><span>🚶 <b>${min} min</b> d’activité</span><span class="muted">objectif ${S.actif} min</span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <p class="muted" style="margin:4px 0 0;font-size:14px">Marche ${marche} min${km?" ("+fmt(km,1)+" km)":""} · Piscine ${piscine} min · ${repas} marche${repas>1?"s":""} après repas<br>${a.n} jour${a.n>1?"s":""} renseigné${a.n>1?"s":""} sur 7 · 👆 touchez un score pour le détail</p>`
+      : `<p class="muted" style="margin:0">Pas encore de données cette semaine. Remplissez l’onglet <b>✍️ Saisie</b>.</p>`}
   </div>
 
+  ${etape("②","L’évolution jour après jour")}
   <div class="card">
-    <h2>🚶 Activité de la semaine</h2>
-    <div style="display:flex;justify-content:space-between"><b>${min} min</b><span class="muted">objectif ${S.actif} min</span></div>
-    <div class="bar"><i style="width:${pct}%"></i></div>
-    <p class="muted" style="margin:4px 0 0">Marche ${marche} min${km?" ("+fmt(km,1)+" km)":""} · Piscine ${piscine} min · ${repas} marche${repas>1?"s":""} après repas</p>
-  </div>
-
-  <div class="card">
-    <h2>Évolution de vos scores</h2>
     <div class="chips" style="margin-bottom:10px">${Object.keys(AXES).map(k=>`<button class="chip ${chartAxe===k?"on":""}" data-axe="${k}">${AXES[k].nom}</button>`).join("")}</div>
     ${courbe(chartAxe)}
   </div>
 
+  ${etape("③","Ma dernière prise de sang")}
   <div class="card">
-    <h2>Ce qui a le plus compté cette semaine</h2>
-    ${Object.keys(agg).length ? factorList(Object.values(agg).map(f => { const n = a?a.n:1, e = {}; for(const k in f.e) e[k] = f.e[k]/n;
+    ${LABS_TB.length ? `<div style="display:grid;grid-template-columns:repeat(${Math.min(3,LABS_TB.length)},1fr);gap:8px">${LABS_TB.map(z => `<div style="background:var(--bg);border-radius:12px;padding:10px 4px;text-align:center">
+        <small class="muted">${z.l}</small><b style="display:block;font-size:26px;margin:2px 0">${fmt(z.r.v,z.dec)}</b>
+        <span style="display:inline-block;background:var(--teal-l);color:var(--teal);font-weight:700;font-size:14px;border-radius:10px;padding:2px 8px">🎯 &lt; ${z.c.toFixed(z.dec).replace(".",",")}</span></div>`).join("")}</div>
+      <p class="muted" style="margin:10px 0 0">Prise de sang du ${fmtShort(derniere)} · prochaine conseillée vers le <b>${fmtShort(addDays(derniere,90))}</b>.</p>`
+      : `<p class="muted" style="margin:0">Ajoutez vos résultats dans l’onglet <b>🩸 Analyses</b>.</p>`}
+  </div>
+
+  ${etape("④","Le détail de la semaine")}
+  <div class="card">
+    ${resume || ""}
+    ${Object.keys(agg).length ? `<h3>Tout ce qui a compté</h3>` + factorList(Object.values(agg).map(f => { const n = a?a.n:1, e = {}; for(const k in f.e) e[k] = f.e[k]/n;
       let src = null; if(f.src){ src = {}; for(const k in f.src) src[k] = f.src[k]/n; } return {l:f.l, e, src, u:f.u, note:f.note, parJour:true}; })) + `<p class="muted" style="margin:8px 0 0">Effet moyen par jour sur la semaine.</p>` : `<p class="muted">Pas encore de données.</p>`}
   </div>
 
-  <div class="tip">Ce score mesure vos <b>habitudes</b>, pas votre sang. Seule la prise de sang dit si le cholestérol ou le sucre ont vraiment bougé : voir l’onglet Analyses.</div>`;
+  <div class="tip">📏 <b>Comment lire le score :</b> 100 = journée idéale, 50 = journée moyenne, <b>70 et plus</b> = vos habitudes vont dans le bon sens. Ce score mesure vos <b>habitudes</b>, pas votre sang : seule la prise de sang dit si la glycémie ou le cholestérol ont vraiment bougé.</div>`;
   app.querySelectorAll("[data-detailw]").forEach(b => b.onclick = () => openDetail(b.dataset.detailw, true));
   app.querySelectorAll("[data-axe]").forEach(b => b.onclick = () => { chartAxe = b.dataset.axe; const y = window.scrollY; render(); window.scrollTo(0,y); });
   app.querySelectorAll("[data-pt]").forEach(g => g.onclick = () => {
@@ -1422,7 +1439,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 34</p>
+    <p class="muted">Version 35</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
