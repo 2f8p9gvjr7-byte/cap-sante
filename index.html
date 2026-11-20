@@ -106,7 +106,7 @@ th:first-child,td:first-child{text-align:left}
 .mtxt .vide{color:#9aa5ad;font-style:italic}
 .mtxt .k{font-weight:700;color:var(--teal);margin-top:4px}
 .repasfond{background:linear-gradient(160deg,#e8f1fb 0%,#efe8fb 45%,#e2f8f6 100%);border-radius:18px;padding:6px 12px;margin-bottom:12px}
-input,select{color:var(--ink);background:var(--card2);color-scheme:dark}
+input,select,textarea{color:var(--ink);background:var(--card2);color-scheme:dark;font-family:inherit}
 input::placeholder{color:#6f7da0}
 .card h2{color:var(--ink)}
 .tip{color:var(--ink)}
@@ -436,7 +436,7 @@ function registerPerso(){
   persoIds.forEach(k => { if(FOODS[k] && FOODS[k].c==="Mes produits") delete FOODS[k]; });
   persoIds = (S.perso||[]).map(p => p.id);
   (S.perso||[]).forEach(p => { FOODS[p.id] = {id:p.id, n:p.n, c:"Mes produits", kcal:+p.kcal||0, prot:+p.prot||0, gluc:+p.gluc||0, suc:+p.suc||0, fib:+p.fib||0, lip:+p.lip||0, ags:+p.ags||0, sel:+p.sel||0,
-    por:[[p.pl||"1 portion", +p.pg||100], ["100 g",100]], o:Object.assign({}, p.o3?{o3:1}:{}, p.ig?{ig:0.5}:{}), lib:p.lib?1:0}; });
+    por:[[p.pl||"1 portion", +p.pg||100], ["100 g",100]], o:Object.assign({}, p.o3?{o3:1}:{}, p.ig?{ig:0.5}:{}), lib: typeof p.lib==="number" ? p.lib : (p.lib?1:0)}; });
 }
 registerPerso();
 
@@ -957,7 +957,7 @@ function closeOv(){ ovRefresh = null; ov.classList.remove("on"); ov.innerHTML = 
 function openSearch(meal){
   document.body.style.overflow = "hidden";
   ov.innerHTML = `<div class="top"><input id="q" type="search" placeholder="Chercher un aliment…" autocomplete="off"><button id="ovx">Annuler</button></div>
-    <div style="display:flex;gap:8px;padding:10px 12px 0;background:var(--bg)"><button class="btn sec" id="goScan" style="margin:0;padding:10px 6px;font-size:15px">📷 Scanner un code-barres</button><button class="btn sec" id="goLabel" style="margin:0;padding:10px 6px;font-size:15px">✏️ Saisir une étiquette</button></div>
+    <div style="display:flex;gap:8px;padding:10px 12px 0;background:var(--bg)"><button class="btn sec" id="goScan" style="margin:0;padding:10px 6px;font-size:15px">📷 Scanner un code-barres</button><button class="btn sec" id="goLabel" style="margin:0;padding:10px 6px;font-size:15px">📋 Lire une étiquette</button></div>
     <div class="body" id="res"></div>`;
   document.getElementById("goScan").onclick = () => openScan(meal);
   document.getElementById("goLabel").onclick = () => openLabel(meal, {});
@@ -977,7 +977,7 @@ function openSearch(meal){
     } else {
       const words = s.split(/\s+/);
       const hits = Object.values(FOODS).filter(f => { const t = norm(f.n+" "+f.c); return words.every(w => t.includes(w)); });
-      html = hits.length ? hits.map(line).join("") : `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou ajoutez le produit avec <b>📷 Scanner un code-barres</b> ou <b>✏️ Saisir une étiquette</b>.</p>`;
+      html = hits.length ? hits.map(line).join("") : `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou ajoutez le produit avec <b>📷 Scanner un code-barres</b> ou <b>📋 Lire une étiquette</b>.</p>`;
     }
     res.innerHTML = html;
     res.querySelectorAll("[data-f]").forEach(b => b.onclick = () => openQty(meal, b.dataset.f, FOODS[b.dataset.f].por[0][1], -1));
@@ -1066,7 +1066,7 @@ function openScan(meal){
     fetchOFF(code).then(d => {
       if(d) openLabel(meal, d);
       else { msg(`<span style="color:var(--warn)">Produit inconnu d’Open Food Facts.</span>`); setTimeout(() => openLabel(meal, {code, info:"Produit introuvable dans la base : recopiez les valeurs de l’étiquette."}), 1200); }
-    }).catch(() => msg(`<span style="color:var(--bad)">Pas de connexion Internet ? Réessayez, ou utilisez ✏️ Saisir une étiquette.</span>`));
+    }).catch(() => msg(`<span style="color:var(--bad)">Pas de connexion Internet ? Réessayez, ou utilisez 📋 Lire une étiquette.</span>`));
   };
   document.getElementById("ovb").onclick = () => openSearch(meal);
   document.getElementById("codeGo").onclick = () => chercher(document.getElementById("codeIn").value);
@@ -1076,41 +1076,128 @@ function openScan(meal){
     decodeImage(f).then(chercher).catch(() => msg(`<span style="color:var(--bad)">Code-barres illisible.</span> Reprenez la photo plus près et bien nette, ou tapez les chiffres.`));
   };
 }
+/* Lecture du texte d'une étiquette (copié ou scanné par l'iPhone) */
+function lireEtiquette(txt){
+  let t = (" "+txt+" ").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")
+    .replace(/[|\[\]{}]/g," ").replace(/(\d)\s*,\s*(\d)/g,"$1.$2").replace(/[ \t]+/g," ");
+  const res = {};
+  // poids de la portion
+  const mp = t.match(/portion[^0-9\n]{0,20}(\d{2,4})\s*g/) || t.match(/(\d{2,4})\s*g\s*\)?\s*\n?\s*(?:=|par)?\s*portion/);
+  if(mp) res.pg = +mp[1];
+  // retirer les en-têtes de colonnes et la ligne « apport de référence »
+  t = t.replace(/apport[^\n]*/g," ").replace(/(pour|per|par)\s*100\s*m?[gl]/g," ").replace(/(\b1\s*)?portion[^0-9\n]{0,20}\d{2,4}\s*g/g," ").replace(/\b100\s*g\b/g," ");
+  // énergie : nombres suivis de kcal
+  const kc = [...t.matchAll(/(\d+(?:\.\d+)?)\s*k\s*c\s*a\s*l/g)].map(m=>+m[1]);
+  if(kc.length) { res.kcal = kc[0]; if(kc[1]) res.kcalP = kc[1]; }
+  const KEYS = [["ags",/(acides?\s+gras\s+satur\w*|satures?|saturated)/],["lip",/(matieres?\s+grasses?|lipides|graisses)/],["suc",/(dont\s+sucres?|sucres?|sugars?)/],
+                ["gluc",/(glucides|carbohydrate)/],["fib",/(fibres?)/],["prot",/(proteines?|protein)/],["sel",/(\bsel\b|\bsalt\b)/]];
+  // positions des mots-clés
+  const pos = [];
+  KEYS.forEach(([k,re]) => { const g = new RegExp(re.source,"g"); let m; while((m = g.exec(t))){
+      if(k==="lip" && /satur/.test(t.slice(m.index).split("\n")[0])) continue;
+      if(k==="suc" && /^sucres?/.test(m[0]) && pos.some(p=>p.k==="suc")) continue;
+      pos.push({k, i:m.index, end:m.index+m[0].length}); break; } });
+  pos.sort((a,b)=>a.i-b.i);
+  const nums = s => [...s.replace(/\d+(?:\.\d+)?\s*k\s*j/g," ").replace(/\d+(?:\.\d+)?\s*k\s*c\s*a\s*l/g," ").replace(/\d+\s*%/g," ").matchAll(/(\d+(?:\.\d+)?)\s*(m?g)?/g)]
+     .map(m => ({v:+m[1], g:!!m[2], raw:m[0]}));
+  let trouve = 0;
+  pos.forEach((p,i) => {
+    let fin = i+1<pos.length ? pos[i+1].i : t.indexOf("\n", p.end); if(fin<0) fin = t.length;
+    const n = nums(t.slice(p.end, fin));
+    if(n.length){ res[p.k] = n[0].v; if(n[1]) res[p.k+"P"] = n[1].v; trouve++; }
+  });
+  // mise en page en colonnes : libellés d'un côté, valeurs de l'autre
+  if(trouve < 3 && pos.length >= 3){
+    pos.forEach(p => { delete res[p.k]; delete res[p.k+"P"]; });
+    const apres = nums(t.slice(pos[pos.length-1].end)).filter(x=>x.v<1000);
+    const ordre = pos.map(p=>p.k);
+    if(apres.length >= ordre.length){ ordre.forEach((k,i)=>{ res[k] = apres[i].v; if(apres.length >= 2*ordre.length) res[k+"P"] = apres[i+ordre.length].v; }); }
+  }
+  // corrections de vraisemblance (pour 100 g)
+  ["lip","ags","gluc","suc","fib","prot"].forEach(k => { if(res[k] > 100) delete res[k]; });
+  if(res.sel > 30) delete res.sel;
+  if(res.ags!=null && res.lip!=null && res.ags > res.lip) delete res.ags;
+  if(res.suc!=null && res.gluc!=null && res.suc > res.gluc) delete res.suc;
+  return res;
+}
+
 function openLabel(meal, d){
   d = d || {};
+  let mode = d.source ? "100" : "portion";
   const num = k => d[k]===undefined || d[k]==="" ? "" : String(d[k]).replace(".",",");
-  const champ = (k, l, u="g") => `<label class="f">${l}<span style="display:flex;align-items:center;gap:6px"><input data-lb="${k}" type="text" inputmode="decimal" value="${num(k)}" style="width:96px"> <span class="muted" style="width:30px">${u}</span></span></label>`;
+  const champ = (k, l, u="g", gros) => `<label class="f"${gros?' style="font-size:18px"':""}>${l}<span style="display:flex;align-items:center;gap:6px"><input data-lb="${k}" type="text" inputmode="decimal" value="${num(k)}" style="width:96px${gros?";font-size:20px;font-weight:700":""}"> <span class="muted" style="width:30px">${u}</span></span></label>`;
   const coche = (k, l, s) => `<label class="row" style="cursor:pointer"><span class="lbl">${l}<small>${s}</small></span><input type="checkbox" data-lbc="${k}" ${d[k]?"checked":""} style="width:26px;height:26px"></label>`;
   document.body.style.overflow = "hidden";
-  ov.innerHTML = `<div class="top"><button id="ovb">‹ Retour</button><b style="flex:1;text-align:center">${d.source?"Vérifier le produit":"Saisir une étiquette"}</b><span style="width:60px"></span></div>
+  ov.innerHTML = `<div class="top"><button id="ovb">‹ Retour</button><b style="flex:1;text-align:center">${d.source?"Vérifier le produit":"Lire une étiquette"}</b><span style="width:60px"></span></div>
   <div class="body"><div class="card" style="margin-top:12px">
     ${d.info?`<p style="margin-top:0;color:var(--warn);font-weight:600">${esc(d.info)}</p>`:""}
-    ${d.source?`<p class="muted" style="margin-top:0">Valeurs trouvées dans ${d.source}${d.code?" (code "+esc(d.code)+")":""}. Comparez avec l’étiquette si vous l’avez sous la main.</p>`:`<p class="muted" style="margin-top:0">Recopiez la colonne <b>pour 100 g</b> du tableau nutritionnel.</p>`}
-    <label class="f" style="display:block">Nom du produit<input id="lbN" type="text" value="${esc(d.n||"")}" placeholder="ex. Sardines à l’huile d’olive" style="display:block;width:100%;margin-top:6px;text-align:left"></label>
-    <h3>Pour 100 g</h3>
-    ${champ("kcal","Énergie","kcal")}${champ("lip","Matières grasses")}${champ("ags","dont acides gras saturés")}${champ("gluc","Glucides")}${champ("suc","dont sucres")}${champ("fib","Fibres")}${champ("prot","Protéines")}${champ("sel","Sel")}
-    <h3>Portion habituelle</h3>
-    <div style="display:flex;gap:8px;align-items:center"><input id="lbPl" type="text" value="${esc(d.pl||"1 portion")}" style="flex:1;padding:8px;font-size:17px;border:1px solid var(--line);border-radius:8px"><input id="lbPg" type="text" inputmode="numeric" value="${d.pg||100}" style="width:80px;padding:8px;font-size:17px;border:1px solid var(--line);border-radius:8px;text-align:right"><span class="muted">g</span></div>
-    <h3>Précisions</h3>
-    ${coche("lib","Contient du sucre ajouté","sucre, sirop, miel… dans la liste des ingrédients")}
-    ${coche("o3","Poisson gras","sardine, maquereau, saumon, hareng… (bon pour le cholestérol)")}
-    ${coche("ig","Riche en glucides rapides","pain blanc, biscuits, céréales sucrées, riz blanc…")}
+    ${d.source?`<p class="muted" style="margin-top:0">Valeurs trouvées dans ${d.source}${d.code?" (code "+esc(d.code)+")":""}.</p>`:`<p class="muted" style="margin-top:0">À faire <b>une seule fois</b> par produit : il sera ensuite dans <b>Mes produits</b>.</p>`}
+    ${d.source?"":`<div style="background:var(--teal-l);border:1px solid var(--teal);border-radius:14px;padding:12px;margin-bottom:12px">
+      <b style="color:var(--teal)">📋 Lire l’étiquette avec l’iPhone</b>
+      <ol style="margin:6px 0 8px;padding-left:20px;font-size:15px;line-height:1.5">
+        <li>Touchez le cadre ci-dessous, puis <b>touchez-le une 2ᵉ fois</b>.</li>
+        <li>Choisissez <b>« Scanner le texte »</b> (petite icône de document avec un cadre).</li>
+        <li>Visez le tableau nutritionnel, puis touchez <b>« Insérer »</b>.</li>
+      </ol>
+      <textarea id="lbTxt" rows="3" placeholder="Touchez ici…" style="width:100%;padding:10px;font-size:16px;border:1px solid var(--line);border-radius:10px;resize:vertical"></textarea>
+      <p id="lbLu" style="margin:6px 0 0;font-weight:600"></p>
+      <p class="muted" style="margin:4px 0 0;font-size:13px">Ou copiez le texte depuis une photo (appui long sur le texte → Copier) et collez-le ici.</p>
+    </div>`}
+    <label class="f" style="display:block">Nom du produit<input id="lbN" type="text" value="${esc(d.n||"")}" placeholder="ex. Salade repas en kit" style="display:block;width:100%;margin-top:6px;text-align:left"></label>
+    <h3>Je recopie la colonne</h3>
+    <div class="chips"><button class="chip" data-mode="portion">1 portion</button><button class="chip" data-mode="100">Pour 100 g</button></div>
+    <label class="f" id="lbPgRow">Poids de la portion<span style="display:flex;align-items:center;gap:6px"><input id="lbPg" type="text" inputmode="numeric" value="${d.pg||""}" placeholder="ex. 320" style="width:96px"> <span class="muted" style="width:30px">g</span></span></label>
+    <h3>Les 4 chiffres utiles</h3>
+    ${champ("kcal","Énergie","kcal",1)}${champ("ags","dont acides gras saturés","g",1)}${champ("suc","dont sucres","g",1)}${champ("sel","Sel","g",1)}
+    <details style="margin-top:8px"><summary class="muted" style="cursor:pointer;padding:6px 0">Plus de détails (facultatif)</summary>
+      ${champ("lip","Matières grasses")}${champ("gluc","Glucides")}${champ("fib","Fibres")}${champ("prot","Protéines")}
+      ${coche("lib","Contient du sucre ajouté","sucre, sirop, miel, cookie, biscuit…")}
+      ${coche("o3","Poisson gras","sardine, maquereau, saumon, hareng…")}
+      ${coche("ig","Riche en glucides rapides","pain blanc, biscuits, pâtes, riz blanc…")}
+      <p class="muted" style="margin:6px 0 0;font-size:14px">Si vous ne touchez à rien, l’app compte la moitié des sucres comme ajoutés.</p>
+    </details>
     <button class="btn" id="lbOk">Enregistrer et ajouter au repas</button>
-    <p class="muted" style="margin:10px 0 0">Le produit sera gardé dans <b>Mes produits</b> pour la prochaine fois.</p>
   </div></div>`;
   ov.classList.add("on");
+  const setMode = m => { mode = m; ov.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("on", b.dataset.mode===m));
+    document.getElementById("lbPgRow").style.display = m==="portion" ? "" : "none"; };
+  ov.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  setMode(mode);
+  const touche = {}; ov.querySelectorAll("[data-lbc]").forEach(c => c.onchange = () => touche[c.dataset.lbc] = true);
+  const txt = document.getElementById("lbTxt");
+  if(txt) txt.oninput = () => {
+    const r = lireEtiquette(txt.value), lu = document.getElementById("lbLu");
+    const cles = ["kcal","ags","suc","sel","lip","gluc","fib","prot"].filter(k => r[k]!=null);
+    if(!cles.length){ lu.innerHTML = txt.value.trim() ? `<span style="color:var(--warn)">Je ne reconnais pas de tableau nutritionnel. Visez bien le tableau.</span>` : ""; return; }
+    setMode("100");
+    cles.forEach(k => { const i = ov.querySelector(`[data-lb="${k}"]`); if(i) i.value = String(r[k]).replace(".",","); });
+    if(r.pg) document.getElementById("lbPg").value = r.pg;
+    if(["lip","gluc","fib","prot"].some(k => r[k]!=null)) ov.querySelector("details").open = true;
+    const manque = ["kcal","ags","suc","sel"].filter(k => r[k]==null);
+    let alerte = "";
+    if(r.kcal && r.lip!=null && r.gluc!=null && r.prot!=null){ const calc = 9*r.lip + 4*r.gluc + 4*r.prot + 2*(r.fib||0); if(Math.abs(calc - r.kcal) > 0.25*r.kcal) alerte = " · ⚠️ chiffres incohérents, vérifiez"; }
+    lu.innerHTML = `<span style="color:${manque.length||alerte?"var(--warn)":"var(--good)"}">✅ ${cles.length} valeurs lues (pour 100 g)${r.pg?" · portion "+r.pg+" g":""}${manque.length?" · à compléter : "+manque.map(k=>({kcal:"énergie",ags:"saturés",suc:"sucres",sel:"sel"})[k]).join(", "):""}${alerte}</span>`;
+  };
   document.getElementById("ovb").onclick = () => d.source||d.code ? openScan(meal) : openSearch(meal);
   document.getElementById("lbOk").onclick = () => {
-    const n = document.getElementById("lbN").value.trim();
-    if(!n){ alert("Indiquez le nom du produit."); return; }
+    let n = document.getElementById("lbN").value.trim();
+    if(!n) n = prompt("Nom du produit (pour le retrouver la prochaine fois) :", "") || ("Produit du " + new Date().toLocaleDateString("fr-FR"));
+    const pg = parseInt(document.getElementById("lbPg").value);
+    if(mode==="portion" && !(pg>0)){ alert("Indiquez le poids de la portion (écrit en haut de la colonne, ex. 320 g)."); return; }
+    const k = mode==="portion" ? 100/pg : 1;
     const p = {id:"u_"+(d.code||Date.now().toString(36)), n, code:d.code||""};
     let ok = true;
-    ov.querySelectorAll("[data-lb]").forEach(i => { const v = i.value.trim().replace(",","."); if(v==="") { p[i.dataset.lb] = 0; if(i.dataset.lb==="kcal") ok = false; } else p[i.dataset.lb] = Math.max(0, +v||0); });
+    ov.querySelectorAll("[data-lb]").forEach(i => { const v = i.value.trim().replace(",","."); if(v===""){ p[i.dataset.lb] = 0; if(i.dataset.lb==="kcal") ok = false; } else p[i.dataset.lb] = Math.round(Math.max(0, +v||0)*k*100)/100; });
     if(!ok){ alert("Indiquez au moins l’énergie (kcal)."); return; }
     ov.querySelectorAll("[data-lbc]").forEach(c => p[c.dataset.lbc] = c.checked);
-    p.pl = document.getElementById("lbPl").value.trim() || "1 portion";
-    p.pg = Math.max(1, parseInt(document.getElementById("lbPg").value) || 100);
-    if(!/^1 /.test(p.pl)) p.pl = "1 " + p.pl.replace(/^1\s*/,"");
+    // devinettes si l'utilisateur n'a rien coché lui-même
+    if(!d.source){
+      if(!touche.lib) p.lib = p.suc >= 2 ? 0.5 : 0;   // inconnu : on compte la moitié des sucres comme ajoutés
+      if(!touche.ig) p.ig = p.gluc ? (p.gluc >= 30 && p.fib < 6) : (p.kcal >= 150 && p.ags < 8 && p.suc < 15 && false);
+      if(!touche.o3) p.o3 = /sardin|maquereau|saumon|hareng|anchois|truite/i.test(n);
+    }
+    p.pl = mode==="portion" ? "1 portion" : (d.pl||"1 portion");
+    p.pg = mode==="portion" ? pg : (pg>0 ? pg : (d.pg||100));
     S.perso = (S.perso||[]).filter(x => x.id!==p.id).concat([p]);
     save(); registerPerso();
     openQty(meal, p.id, p.pg, -1);
@@ -1443,7 +1530,7 @@ function rReglages(){
   <div class="card">
     <h2>Mes produits</h2>
     ${(S.perso||[]).length ? S.perso.map(p=>`<div class="row"><div class="lbl">${esc(p.n)}<small>${Math.round(p.kcal)} kcal · sat. ${fmt(p.ags,1)} g · sucres ${fmt(p.suc,1)} g · sel ${fmt(p.sel,2)} g (pour 100 g)</small></div><button class="chip" data-delp="${esc(p.id)}">Suppr.</button></div>`).join("")
-      : `<p class="muted" style="margin:0">Aucun pour l’instant. Ajoutez-en depuis Saisie → un repas → Ajouter un aliment → 📷 Scanner ou ✏️ Saisir une étiquette.</p>`}
+      : `<p class="muted" style="margin:0">Aucun pour l’instant. Ajoutez-en depuis Saisie → un repas → Ajouter un aliment → 📷 Scanner ou 📋 Lire une étiquette.</p>`}
   </div>
   <div class="card">
     <h2>Sauvegarde</h2>
@@ -1457,7 +1544,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 36</p>
+    <p class="muted">Version 38</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
