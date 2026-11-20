@@ -329,6 +329,16 @@ const FOODS_RAW = [
  ["croissant","Croissant","Sucré",410,8,45,8,2.5,21,13,1,[["1 croissant",60]],{ig:1}],
  ["painchoc","Pain au chocolat","Sucré",420,8,48,12,3,21,13,0.9,[["1 pain au chocolat",70]],{ig:1}],
  ["biscuits","Biscuits secs","Sucré",450,7,74,24,2.5,13,7,0.9,[["1 biscuit",8],["4 biscuits",32]],{ig:1}],
+ ["cookie","Cookie (pépites de chocolat)","Sucré",480,6,62,32,2.5,23,11,0.7,[["1 cookie",30],["1 grand cookie",60]],{ig:1}],
+ ["sable","Sablé / petit beurre","Sucré",470,7,72,22,2,17,10,0.8,[["1 biscuit",8],["4 biscuits",32]],{ig:1}],
+ ["madeleine","Madeleine","Sucré",440,6,52,28,1,23,13,0.7,[["1 madeleine",25]],{ig:1}],
+ ["brownie","Brownie","Sucré",430,5,52,38,2.5,22,10,0.4,[["1 part",60]],{ig:1}],
+ ["muffin","Muffin","Sucré",400,5,50,28,1.5,20,6,0.8,[["1 muffin",80]],{ig:1}],
+ ["barre_cer","Barre de céréales","Sucré",420,7,65,28,5,14,6,0.4,[["1 barre",25]],{ig:1}],
+ ["pain_epice","Pain d’épices","Sucré",330,4,75,40,3,2,0.5,0.6,[["1 tranche",30]],{ig:1}],
+ ["brioche","Brioche","Sucré",370,8,50,14,2,15,9,1,[["1 tranche",35]],{ig:1}],
+ ["gaufre","Gaufre","Sucré",380,6,48,22,1.5,18,9,0.6,[["1 gaufre",50]],{ig:1}],
+ ["gressin","Gressins","Pain et féculents",420,12,68,3,3.5,10,1.5,2,[["2 gressins",10]],{ig:1}],
  ["gateau","Gâteau, pâtisserie","Sucré",380,5,50,30,1.5,18,10,0.5,[["1 part",80]],{ig:1}],
  ["porient","Pâtisserie orientale","Sucré",430,6,55,35,2.5,21,6,0.2,[["1 pièce",40]],{ig:1}],
  ["glace","Glace","Sucré",200,3.5,25,22,0.5,10,6,0.15,[["1 boule",50],["2 boules",100]],{}],
@@ -975,7 +985,8 @@ function openSearch(meal){
       let c = "";
       FOODS_RAW.forEach(r => { const f = FOODS[r[0]]; if(f.c!==c){ c = f.c; html += `<div class="cat">${c}</div>`; } html += line(f); });
     } else {
-      const words = s.split(/\s+/);
+      const sing = w => w.length>3 ? w.replace(/(s|x)$/,"") : w;
+      const words = s.split(/\s+/).map(sing);
       const hits = Object.values(FOODS).filter(f => { const t = norm(f.n+" "+f.c); return words.every(w => t.includes(w)); });
       html = hits.length ? hits.map(line).join("") : `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou ajoutez le produit avec <b>📷 Scanner un code-barres</b> ou <b>📋 Lire une étiquette</b>.</p>`;
     }
@@ -1558,7 +1569,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 39</p>
+    <p class="muted">Version 40</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
