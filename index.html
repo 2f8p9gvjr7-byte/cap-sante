@@ -418,7 +418,16 @@ function save(){ try{
 }catch(e){ alert("Impossible d’enregistrer sur cet appareil."); } }
 let D = load(K.days, {});
 let L = load(K.labs, []);
-let S = Object.assign({sexe:"H", ldl:1.00, actif:210, kcal:2000, eau:1000, recents:[]}, load(K.set, {}));
+let S = Object.assign({sexe:"H", ldl:1.00, actif:210, kcal:2000, eau:1000, recents:[], perso:[]}, load(K.set, {}));
+/* Mes produits : scannés ou saisis depuis l'étiquette (valeurs pour 100 g) */
+let persoIds = [];
+function registerPerso(){
+  persoIds.forEach(k => { if(FOODS[k] && FOODS[k].c==="Mes produits") delete FOODS[k]; });
+  persoIds = (S.perso||[]).map(p => p.id);
+  (S.perso||[]).forEach(p => { FOODS[p.id] = {id:p.id, n:p.n, c:"Mes produits", kcal:+p.kcal||0, prot:+p.prot||0, gluc:+p.gluc||0, suc:+p.suc||0, fib:+p.fib||0, lip:+p.lip||0, ags:+p.ags||0, sel:+p.sel||0,
+    por:[[p.pl||"1 portion", +p.pg||100], ["100 g",100]], o:Object.assign({}, p.o3?{o3:1}:{}, p.ig?{ig:0.5}:{}), lib:p.lib?1:0}; });
+}
+registerPerso();
 
 /* ---------- Outils ---------- */
 const pad = n => String(n).padStart(2,"0");
@@ -885,22 +894,28 @@ const norm = s => s.toLowerCase().replace(/œ/g,"oe").replace(/æ/g,"ae").replac
 function closeOv(){ ov.classList.remove("on"); ov.innerHTML = ""; document.body.style.overflow = ""; }
 function openSearch(meal){
   document.body.style.overflow = "hidden";
-  ov.innerHTML = `<div class="top"><input id="q" type="search" placeholder="Chercher un aliment…" autocomplete="off"><button id="ovx">Annuler</button></div><div class="body" id="res"></div>`;
+  ov.innerHTML = `<div class="top"><input id="q" type="search" placeholder="Chercher un aliment…" autocomplete="off"><button id="ovx">Annuler</button></div>
+    <div style="display:flex;gap:8px;padding:10px 12px 0;background:var(--bg)"><button class="btn sec" id="goScan" style="margin:0;padding:10px 6px;font-size:15px">📷 Scanner un code-barres</button><button class="btn sec" id="goLabel" style="margin:0;padding:10px 6px;font-size:15px">✏️ Saisir une étiquette</button></div>
+    <div class="body" id="res"></div>`;
+  document.getElementById("goScan").onclick = () => openScan(meal);
+  document.getElementById("goLabel").onclick = () => openLabel(meal, {});
   ov.classList.add("on");
   const q = document.getElementById("q"), res = document.getElementById("res");
-  const line = f => `<button class="item" data-f="${f.id}"><span>${esc(f.n)}<small>${f.por[0][0]} (${f.por[0][1]} g)</small></span><span class="k muted">${f.kcal} kcal/100 g</span></button>`;
+  const line = f => `<button class="item" data-f="${f.id}"><span>${esc(f.n)}<small>${f.por[0][0]} (${f.por[0][1]} g)</small></span><span class="k muted">${Math.round(f.kcal)} kcal/100 g</span></button>`;
   const show = () => {
     const s = norm(q.value.trim());
     let html = "";
     if(!s){
       const rec = (S.recents||[]).map(id=>FOODS[id]).filter(Boolean);
       if(rec.length) html += `<div class="cat">Récents</div>` + rec.map(line).join("");
+      const mp = (S.perso||[]).map(p=>FOODS[p.id]).filter(Boolean);
+      if(mp.length) html += `<div class="cat">Mes produits</div>` + mp.map(line).join("");
       let c = "";
       FOODS_RAW.forEach(r => { const f = FOODS[r[0]]; if(f.c!==c){ c = f.c; html += `<div class="cat">${c}</div>`; } html += line(f); });
     } else {
       const words = s.split(/\s+/);
       const hits = Object.values(FOODS).filter(f => { const t = norm(f.n+" "+f.c); return words.every(w => t.includes(w)); });
-      html = hits.length ? hits.map(line).join("") : `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou utilisez la liste rapide de l’onglet Aujourd’hui.</p>`;
+      html = hits.length ? hits.map(line).join("") : `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou ajoutez le produit avec <b>📷 Scanner un code-barres</b> ou <b>✏️ Saisir une étiquette</b>.</p>`;
     }
     res.innerHTML = html;
     res.querySelectorAll("[data-f]").forEach(b => b.onclick = () => openQty(meal, b.dataset.f, FOODS[b.dataset.f].por[0][1], -1));
@@ -909,6 +924,137 @@ function openSearch(meal){
   document.getElementById("ovx").onclick = () => openMeal(meal);
   setTimeout(()=>q.focus(), 50);
 }
+/* ---------- Scanner un code-barres (Open Food Facts) ---------- */
+let zxLoad = null;
+function loadZX(){
+  if(window.ZXing) return Promise.resolve();
+  if(!zxLoad) zxLoad = new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "/zxing.min.js"; sc.onload = ok; sc.onerror = () => { zxLoad = null; ko(); }; document.head.appendChild(sc); });
+  return zxLoad;
+}
+function decodeImage(file){
+  return loadZX().then(() => new Promise((ok, ko) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E]);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      const reader = new ZXing.MultiFormatReader(); reader.setHints(hints);
+      const essais = [];
+      [1400, 900, 2000].forEach(max => [0, 90].forEach(rot => essais.push([max, rot])));
+      for(const [max, rot] of essais){
+        const k = Math.min(1, max/Math.max(img.width, img.height));
+        const w = Math.round(img.width*k), h = Math.round(img.height*k);
+        const cv = document.createElement("canvas"); cv.width = rot ? h : w; cv.height = rot ? w : h;
+        const cx = cv.getContext("2d");
+        if(rot){ cx.translate(h, 0); cx.rotate(Math.PI/2); }
+        cx.drawImage(img, 0, 0, w, h);
+        try{
+          const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(cv)));
+          const r = reader.decode(bmp); URL.revokeObjectURL(url); ok(r.getText()); return;
+        }catch(e){}
+      }
+      URL.revokeObjectURL(url); ko(new Error("illisible"));
+    };
+    img.onerror = () => ko(new Error("image"));
+    img.src = url;
+  }));
+}
+function fetchOFF(code){
+  const champs = "product_name,product_name_fr,brands,quantity,serving_size,nutriments,ingredients_text,ingredients_text_fr,categories_tags";
+  return fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=${champs}`)
+    .then(r => r.json()).then(j => {
+      if(!j || j.status!==1 || !j.product) return null;
+      const p = j.product, n = p.nutriments||{};
+      const v = k => { const x = n[k+"_100g"]; return x==null || x==="" ? "" : Math.round(+x*100)/100; };
+      let kcal = v("energy-kcal"); if(kcal==="" && n["energy_100g"]!=null) kcal = Math.round(n["energy_100g"]/4.184);
+      let sel = v("salt"); if(sel==="" && n["sodium_100g"]!=null) sel = Math.round(n["sodium_100g"]*2.5*100)/100;
+      const nom = (p.product_name_fr || p.product_name || "Produit "+code).trim();
+      const marque = (p.brands||"").split(",")[0].trim();
+      const q = String(p.serving_size || p.quantity || "");
+      const mq = q.replace(",",".").match(/(\d+(?:\.\d+)?)\s*(g|ml)\b/i);
+      const pg = mq && +mq[1] <= 600 ? Math.round(+mq[1]) : 100;
+      const ingr = (p.ingredients_text_fr || p.ingredients_text || "").toLowerCase();
+      const cats = (p.categories_tags||[]).join(" ");
+      const txt = (nom+" "+cats).toLowerCase();
+      return { code, n: marque && !nom.toLowerCase().includes(marque.toLowerCase()) ? nom+" – "+marque : nom,
+        kcal, lip:v("fat"), ags:v("saturated-fat"), gluc:v("carbohydrates"), suc:v("sugars"), fib:v("fiber"), prot:v("proteins"), sel,
+        pl: p.serving_size ? "1 portion" : "1 paquet / boîte", pg,
+        o3: /sardin|maquereau|mackerel|saumon|salmon|hareng|herring|anchois|anchov|truite|trout/.test(txt),
+        lib: /sucre|sirop|miel|dextrose|glucose|fructose|saccharose|caramel/.test(ingr),
+        ig: (+v("carbohydrates")||0) >= 30 && (+v("fiber")||0) < 6, source:"Open Food Facts" };
+    });
+}
+function openScan(meal){
+  document.body.style.overflow = "hidden";
+  ov.innerHTML = `<div class="top"><button id="ovb">‹ Retour</button><b style="flex:1;text-align:center">Scanner un code-barres</b><span style="width:60px"></span></div>
+  <div class="body"><div class="card" style="margin-top:12px">
+    <p style="margin-top:0">Prenez une photo <b>nette</b> du code-barres, bien à plat et éclairé, en remplissant l’écran.</p>
+    <label class="btn" style="display:block;text-align:center">📷 Prendre la photo du code-barres<input id="scanIn" type="file" accept="image/*" capture="environment" style="display:none"></label>
+    <p class="muted" style="text-align:center;margin:14px 0 6px">— ou tapez les chiffres sous le code —</p>
+    <div style="display:flex;gap:8px"><input id="codeIn" type="text" inputmode="numeric" placeholder="ex. 3263670001519" style="flex:1;padding:10px;font-size:17px;border:1px solid var(--line);border-radius:10px"><button class="btn" id="codeGo" style="margin:0;width:auto;padding:10px 16px">OK</button></div>
+    <p id="scanMsg" style="margin:12px 0 0;font-weight:600"></p>
+    <p class="muted" style="margin:10px 0 0">Les valeurs viennent d’<b>Open Food Facts</b>, une base collaborative : vous pourrez les vérifier et les corriger avant d’enregistrer. Il faut être connecté à Internet.</p>
+  </div></div>`;
+  ov.classList.add("on");
+  const msg = t => document.getElementById("scanMsg").innerHTML = t;
+  const chercher = code => {
+    code = String(code).replace(/\D/g,"");
+    if(code.length<8){ msg(`<span style="color:var(--bad)">Code incomplet.</span>`); return; }
+    msg("🔎 Recherche du produit " + code + "…");
+    fetchOFF(code).then(d => {
+      if(d) openLabel(meal, d);
+      else { msg(`<span style="color:var(--warn)">Produit inconnu d’Open Food Facts.</span>`); setTimeout(() => openLabel(meal, {code, info:"Produit introuvable dans la base : recopiez les valeurs de l’étiquette."}), 1200); }
+    }).catch(() => msg(`<span style="color:var(--bad)">Pas de connexion Internet ? Réessayez, ou utilisez ✏️ Saisir une étiquette.</span>`));
+  };
+  document.getElementById("ovb").onclick = () => openSearch(meal);
+  document.getElementById("codeGo").onclick = () => chercher(document.getElementById("codeIn").value);
+  document.getElementById("scanIn").onchange = e => {
+    const f = e.target.files[0]; if(!f) return;
+    msg("⏳ Lecture du code-barres…");
+    decodeImage(f).then(chercher).catch(() => msg(`<span style="color:var(--bad)">Code-barres illisible.</span> Reprenez la photo plus près et bien nette, ou tapez les chiffres.`));
+  };
+}
+function openLabel(meal, d){
+  d = d || {};
+  const num = k => d[k]===undefined || d[k]==="" ? "" : String(d[k]).replace(".",",");
+  const champ = (k, l, u="g") => `<label class="f">${l}<span style="display:flex;align-items:center;gap:6px"><input data-lb="${k}" type="text" inputmode="decimal" value="${num(k)}" style="width:96px"> <span class="muted" style="width:30px">${u}</span></span></label>`;
+  const coche = (k, l, s) => `<label class="row" style="cursor:pointer"><span class="lbl">${l}<small>${s}</small></span><input type="checkbox" data-lbc="${k}" ${d[k]?"checked":""} style="width:26px;height:26px"></label>`;
+  document.body.style.overflow = "hidden";
+  ov.innerHTML = `<div class="top"><button id="ovb">‹ Retour</button><b style="flex:1;text-align:center">${d.source?"Vérifier le produit":"Saisir une étiquette"}</b><span style="width:60px"></span></div>
+  <div class="body"><div class="card" style="margin-top:12px">
+    ${d.info?`<p style="margin-top:0;color:var(--warn);font-weight:600">${esc(d.info)}</p>`:""}
+    ${d.source?`<p class="muted" style="margin-top:0">Valeurs trouvées dans ${d.source}${d.code?" (code "+esc(d.code)+")":""}. Comparez avec l’étiquette si vous l’avez sous la main.</p>`:`<p class="muted" style="margin-top:0">Recopiez la colonne <b>pour 100 g</b> du tableau nutritionnel.</p>`}
+    <label class="f" style="display:block">Nom du produit<input id="lbN" type="text" value="${esc(d.n||"")}" placeholder="ex. Sardines à l’huile d’olive" style="display:block;width:100%;margin-top:6px;text-align:left"></label>
+    <h3>Pour 100 g</h3>
+    ${champ("kcal","Énergie","kcal")}${champ("lip","Matières grasses")}${champ("ags","dont acides gras saturés")}${champ("gluc","Glucides")}${champ("suc","dont sucres")}${champ("fib","Fibres")}${champ("prot","Protéines")}${champ("sel","Sel")}
+    <h3>Portion habituelle</h3>
+    <div style="display:flex;gap:8px;align-items:center"><input id="lbPl" type="text" value="${esc(d.pl||"1 portion")}" style="flex:1;padding:8px;font-size:17px;border:1px solid var(--line);border-radius:8px"><input id="lbPg" type="text" inputmode="numeric" value="${d.pg||100}" style="width:80px;padding:8px;font-size:17px;border:1px solid var(--line);border-radius:8px;text-align:right"><span class="muted">g</span></div>
+    <h3>Précisions</h3>
+    ${coche("lib","Contient du sucre ajouté","sucre, sirop, miel… dans la liste des ingrédients")}
+    ${coche("o3","Poisson gras","sardine, maquereau, saumon, hareng… (bon pour le cholestérol)")}
+    ${coche("ig","Riche en glucides rapides","pain blanc, biscuits, céréales sucrées, riz blanc…")}
+    <button class="btn" id="lbOk">Enregistrer et ajouter au repas</button>
+    <p class="muted" style="margin:10px 0 0">Le produit sera gardé dans <b>Mes produits</b> pour la prochaine fois.</p>
+  </div></div>`;
+  ov.classList.add("on");
+  document.getElementById("ovb").onclick = () => d.source||d.code ? openScan(meal) : openSearch(meal);
+  document.getElementById("lbOk").onclick = () => {
+    const n = document.getElementById("lbN").value.trim();
+    if(!n){ alert("Indiquez le nom du produit."); return; }
+    const p = {id:"u_"+(d.code||Date.now().toString(36)), n, code:d.code||""};
+    let ok = true;
+    ov.querySelectorAll("[data-lb]").forEach(i => { const v = i.value.trim().replace(",","."); if(v==="") { p[i.dataset.lb] = 0; if(i.dataset.lb==="kcal") ok = false; } else p[i.dataset.lb] = Math.max(0, +v||0); });
+    if(!ok){ alert("Indiquez au moins l’énergie (kcal)."); return; }
+    ov.querySelectorAll("[data-lbc]").forEach(c => p[c.dataset.lbc] = c.checked);
+    p.pl = document.getElementById("lbPl").value.trim() || "1 portion";
+    p.pg = Math.max(1, parseInt(document.getElementById("lbPg").value) || 100);
+    if(!/^1 /.test(p.pl)) p.pl = "1 " + p.pl.replace(/^1\s*/,"");
+    S.perso = (S.perso||[]).filter(x => x.id!==p.id).concat([p]);
+    save(); registerPerso();
+    openQty(meal, p.id, p.pg, -1);
+  };
+}
+
 function openQty(meal, fid, grams, idx){
   const f = FOODS[fid]; let g = Math.round(grams);
   const up = f.por.find(([l]) => /^1 /.test(l));
@@ -1166,6 +1312,11 @@ function rReglages(){
     <p class="muted" style="margin:0">Augmentez-le petit à petit, par exemple de 100 ml toutes les 2 semaines, jusqu’à 1 500 ml, sauf avis médical contraire.</p>
   </div>
   <div class="card">
+    <h2>Mes produits</h2>
+    ${(S.perso||[]).length ? S.perso.map(p=>`<div class="row"><div class="lbl">${esc(p.n)}<small>${Math.round(p.kcal)} kcal · sat. ${fmt(p.ags,1)} g · sucres ${fmt(p.suc,1)} g · sel ${fmt(p.sel,2)} g (pour 100 g)</small></div><button class="chip" data-delp="${esc(p.id)}">Suppr.</button></div>`).join("")
+      : `<p class="muted" style="margin:0">Aucun pour l’instant. Ajoutez-en depuis Repas → Ajouter un aliment → 📷 Scanner ou ✏️ Saisir une étiquette.</p>`}
+  </div>
+  <div class="card">
     <h2>Sauvegarde</h2>
     <p class="muted" style="margin:0">Vos données restent uniquement sur ce téléphone. Exportez-les de temps en temps.</p>
     <button class="btn" id="exp">Exporter mes données</button>
@@ -1177,7 +1328,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 31</p>
+    <p class="muted">Version 32</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
@@ -1185,6 +1336,8 @@ function rReglages(){
   document.getElementById("seau").onchange = e => { const v = parseInt(e.target.value); if(v>=300 && v<=4000){ S.eau = v; save(); } };
   document.getElementById("skcal").onchange = e => { const v = parseInt(e.target.value); if(v>=1000){ S.kcal = v; save(); } };
   document.getElementById("exp").onclick = exporter;
+  app.querySelectorAll("[data-delp]").forEach(b => b.onclick = () => { const p = S.perso.find(x=>x.id===b.dataset.delp);
+    if(p && confirm("Supprimer « "+p.n+" » de Mes produits ?")){ S.perso = S.perso.filter(x=>x.id!==p.id); save(); registerPerso(); render(); } });
   document.getElementById("imp").onclick = () => document.getElementById("fileIn").click();
   document.getElementById("rst").onclick = () => { if(confirm("Effacer toutes les données de l’application ?") && confirm("Vraiment tout effacer ?")){ D = {}; L = []; save(); render(); } };
 }
@@ -1207,7 +1360,7 @@ document.getElementById("fileIn").onchange = e => {
       const j = JSON.parse(r.result); let n = 0;
       if(j.days && typeof j.days==="object"){ Object.assign(D, j.days); n++; }
       if(Array.isArray(j.labs)){ j.labs.forEach(e => { if(e && e.date){ L = L.filter(x=>x.date!==e.date).concat([e]); } }); n++; }
-      if(j.settings && typeof j.settings==="object"){ Object.assign(S, j.settings); n++; }
+      if(j.settings && typeof j.settings==="object"){ Object.assign(S, j.settings); registerPerso(); n++; }
       if(!n) throw 0;
       save(); alert("Import réussi."); render();
     }catch(err){ alert("Ce fichier n’est pas reconnu."); }
