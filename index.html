@@ -1089,6 +1089,7 @@ function lireEtiquette(txt){
   // énergie : nombres suivis de kcal
   const kc = [...t.matchAll(/(\d+(?:\.\d+)?)\s*k\s*c\s*a\s*l/g)].map(m=>+m[1]);
   if(kc.length) { res.kcal = kc[0]; if(kc[1]) res.kcalP = kc[1]; }
+  else { const kj = [...t.matchAll(/(\d+(?:\.\d+)?)\s*k\s*j/g)].map(m=>+m[1]); if(kj.length) res.kcal = Math.round(kj[0]/4.184); }
   const KEYS = [["ags",/(acides?\s+gras\s+satur\w*|satures?|saturated)/],["lip",/(matieres?\s+grasses?|lipides|graisses)/],["suc",/(dont\s+sucres?|sucres?|sugars?)/],
                 ["gluc",/(glucides|carbohydrate)/],["fib",/(fibres?)/],["prot",/(proteines?|protein)/],["sel",/(\bsel\b|\bsalt\b)/]];
   // positions des mots-clés
@@ -1106,12 +1107,25 @@ function lireEtiquette(txt){
     const n = nums(t.slice(p.end, fin));
     if(n.length){ res[p.k] = n[0].v; if(n[1]) res[p.k+"P"] = n[1].v; trouve++; }
   });
-  // mise en page en colonnes : libellés d'un côté, valeurs de l'autre
-  if(trouve < 3 && pos.length >= 3){
+  // mise en page en colonnes, ou colonne de chiffres seule (ordre légal européen)
+  if(trouve < 3){
     pos.forEach(p => { delete res[p.k]; delete res[p.k+"P"]; });
-    const apres = nums(t.slice(pos[pos.length-1].end)).filter(x=>x.v<1000);
-    const ordre = pos.map(p=>p.k);
-    if(apres.length >= ordre.length){ ordre.forEach((k,i)=>{ res[k] = apres[i].v; if(apres.length >= 2*ordre.length) res[k+"P"] = apres[i+ordre.length].v; }); }
+    const tous = nums(t).filter(x => x.v < 1000);
+    const ordre = pos.length >= 3 ? pos.map(p=>p.k) : null;
+    const assigne = (keys, vals) => keys.forEach((k,i) => { if(vals[i]) res[k] = vals[i].v; });
+    if(ordre && tous.length >= ordre.length){
+      assigne(ordre, tous);
+      if(tous.length >= 2*ordre.length) ordre.forEach((k,i) => res[k+"P"] = tous[i+ordre.length].v);
+    } else if(!ordre && tous.length >= 6){
+      // Ordre imposé : matières grasses, dont saturés, glucides, dont sucres, (fibres), protéines, sel
+      const avecFib = ["lip","ags","gluc","suc","fib","prot","sel"], sansFib = ["lip","ags","gluc","suc","prot","sel"];
+      const ok = (keys, v) => { const r = {}; keys.forEach((k,i)=>r[k]=v[i]&&v[i].v); return r.ags<=r.lip && r.suc<=r.gluc && r.sel<30 && keys.every(k=>r[k]!=null); };
+      const v7 = tous.slice(0,7), v6 = tous.slice(0,6);
+      if(tous.length >= 7 && ok(avecFib, v7)) assigne(avecFib, v7);
+      else if(ok(sansFib, v6)) assigne(sansFib, v6);
+      else if(tous.length >= 7) assigne(avecFib, v7);
+      res.ordre = true;
+    }
   }
   // corrections de vraisemblance (pour 100 g)
   ["lip","ags","gluc","suc","fib","prot"].forEach(k => { if(res[k] > 100) delete res[k]; });
@@ -1137,16 +1151,16 @@ function openLabel(meal, d){
       <ol style="margin:6px 0 8px;padding-left:20px;font-size:15px;line-height:1.5">
         <li>Touchez le cadre ci-dessous, puis <b>touchez-le une 2ᵉ fois</b>.</li>
         <li>Choisissez <b>« Scanner le texte »</b> (petite icône de document avec un cadre).</li>
-        <li>Visez le tableau nutritionnel, puis touchez <b>« Insérer »</b>.</li>
+        <li>Visez <b>la colonne de chiffres « Pour 100 g »</b>, puis touchez <b>« Insérer »</b>.</li>
       </ol>
       <textarea id="lbTxt" rows="3" placeholder="Touchez ici…" style="width:100%;padding:10px;font-size:16px;border:1px solid var(--line);border-radius:10px;resize:vertical"></textarea>
       <p id="lbLu" style="margin:6px 0 0;font-weight:600"></p>
-      <p class="muted" style="margin:4px 0 0;font-size:13px">Ou copiez le texte depuis une photo (appui long sur le texte → Copier) et collez-le ici.</p>
+      <p class="muted" style="margin:4px 0 0;font-size:13px">Les chiffres seuls suffisent : sur toutes les étiquettes européennes, l’ordre est le même (énergie, matières grasses, saturés, glucides, sucres, fibres, protéines, sel).</p>
     </div>`}
     <label class="f" style="display:block">Nom du produit<input id="lbN" type="text" value="${esc(d.n||"")}" placeholder="ex. Salade repas en kit" style="display:block;width:100%;margin-top:6px;text-align:left"></label>
     <h3>Je recopie la colonne</h3>
     <div class="chips"><button class="chip" data-mode="portion">1 portion</button><button class="chip" data-mode="100">Pour 100 g</button></div>
-    <label class="f" id="lbPgRow">Poids de la portion<span style="display:flex;align-items:center;gap:6px"><input id="lbPg" type="text" inputmode="numeric" value="${d.pg||""}" placeholder="ex. 320" style="width:96px"> <span class="muted" style="width:30px">g</span></span></label>
+    <label class="f" id="lbPgRow"><span id="lbPgLbl">Poids de la portion</span><span style="display:flex;align-items:center;gap:6px"><input id="lbPg" type="text" inputmode="numeric" value="${d.pg||""}" placeholder="ex. 320" style="width:96px"> <span class="muted" style="width:30px">g</span></span></label>
     <h3>Les 4 chiffres utiles</h3>
     ${champ("kcal","Énergie","kcal",1)}${champ("ags","dont acides gras saturés","g",1)}${champ("suc","dont sucres","g",1)}${champ("sel","Sel","g",1)}
     <details style="margin-top:8px"><summary class="muted" style="cursor:pointer;padding:6px 0">Plus de détails (facultatif)</summary>
@@ -1160,7 +1174,7 @@ function openLabel(meal, d){
   </div></div>`;
   ov.classList.add("on");
   const setMode = m => { mode = m; ov.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("on", b.dataset.mode===m));
-    document.getElementById("lbPgRow").style.display = m==="portion" ? "" : "none"; };
+    document.getElementById("lbPgLbl").textContent = m==="portion" ? "Poids de la portion" : "Poids d’une portion (facultatif)"; };
   ov.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
   setMode(mode);
   const touche = {}; ov.querySelectorAll("[data-lbc]").forEach(c => c.onchange = () => touche[c.dataset.lbc] = true);
@@ -1176,7 +1190,7 @@ function openLabel(meal, d){
     const manque = ["kcal","ags","suc","sel"].filter(k => r[k]==null);
     let alerte = "";
     if(r.kcal && r.lip!=null && r.gluc!=null && r.prot!=null){ const calc = 9*r.lip + 4*r.gluc + 4*r.prot + 2*(r.fib||0); if(Math.abs(calc - r.kcal) > 0.25*r.kcal) alerte = " · ⚠️ chiffres incohérents, vérifiez"; }
-    lu.innerHTML = `<span style="color:${manque.length||alerte?"var(--warn)":"var(--good)"}">✅ ${cles.length} valeurs lues (pour 100 g)${r.pg?" · portion "+r.pg+" g":""}${manque.length?" · à compléter : "+manque.map(k=>({kcal:"énergie",ags:"saturés",suc:"sucres",sel:"sel"})[k]).join(", "):""}${alerte}</span>`;
+    lu.innerHTML = `<span style="color:${manque.length||alerte?"var(--warn)":"var(--good)"}">✅ ${cles.length} valeurs lues (pour 100 g${r.ordre?", d’après l’ordre de l’étiquette":""})${r.pg?" · portion "+r.pg+" g":""}${manque.length?" · à compléter : "+manque.map(k=>({kcal:"énergie",ags:"saturés",suc:"sucres",sel:"sel"})[k]).join(", "):""}${alerte}</span>`;
   };
   document.getElementById("ovb").onclick = () => d.source||d.code ? openScan(meal) : openSearch(meal);
   document.getElementById("lbOk").onclick = () => {
@@ -1544,7 +1558,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 38</p>
+    <p class="muted">Version 39</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
