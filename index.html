@@ -1223,8 +1223,8 @@ function rBilan(){
 
   <div class="card">
     <h2>Évolution de vos scores</h2>
-    ${chart()}
-    <div class="legend" ${Object.keys(D).filter(k=>k>addDays(today(),-30)&&hasData(D[k])).length<3?'style="display:none"':''}>${Object.keys(AXES).map(k=>`<span><i style="background:${AXES[k].hex}"></i>${AXES[k].nom}</span>`).join("")}<span><i style="background:#94a3b8"></i>Objectif 70</span></div>
+    <div class="chips" style="margin-bottom:10px">${Object.keys(AXES).map(k=>`<button class="chip ${chartAxe===k?"on":""}" data-axe="${k}">${AXES[k].nom}</button>`).join("")}</div>
+    ${courbe(chartAxe)}
   </div>
 
   <div class="card">
@@ -1235,6 +1235,13 @@ function rBilan(){
 
   <div class="tip">Ce score mesure vos <b>habitudes</b>, pas votre sang. Seule la prise de sang dit si le cholestérol ou le sucre ont vraiment bougé : voir l’onglet Analyses.</div>`;
   app.querySelectorAll("[data-detailw]").forEach(b => b.onclick = () => openDetail(b.dataset.detailw, true));
+  app.querySelectorAll("[data-axe]").forEach(b => b.onclick = () => { chartAxe = b.dataset.axe; const y = window.scrollY; render(); window.scrollTo(0,y); });
+  app.querySelectorAll("[data-pt]").forEach(g => g.onclick = () => {
+    const [s, v] = g.dataset.pt.split("|"), n = niveau(+v);
+    app.querySelectorAll("[data-pt] circle").forEach(c => c.setAttribute("r", 5));
+    g.querySelector("circle").setAttribute("r", 8);
+    document.getElementById("ptInfo").innerHTML = `${esc(parse(s).toLocaleDateString("fr-FR",{weekday:"long", day:"numeric", month:"long"}))} : <b style="color:${n.c}">${v}</b> · ${n.t}`;
+  });
 }
 
 /* ---------- Carte « Mes objectifs » ---------- */
@@ -1272,6 +1279,49 @@ function objCard(agg, a, b){
     ${last?`<p class="muted" style="margin:12px 0 0">Prochaine prise de sang conseillée vers le <b>${fmtShort(addDays(last,90))}</b> pour vérifier les progrès.</p>`:""}</div>`;
 }
 
+/* Courbe arrondie avec un visage par jour */
+let chartAxe = "sucre";
+function courbe(axe){
+  const t = today();
+  const filled = Object.keys(D).filter(k => k<=t && k>addDays(t,-30) && hasData(D[k])).sort();
+  if(filled.length<2) return `<p class="muted" style="margin:0">La courbe apparaîtra dès <b>2 jours</b> remplis (${filled.length} pour l’instant).</p>`;
+  const N = Math.max(7, Math.min(30, Math.round((parse(t)-parse(filled[0]))/864e5)+1));
+  const W = 340, H = 220, P = {l:12, r:12, t:34, b:30};
+  const vals = filled.filter(k => k>addDays(t,-N)).map(k => score(day(k))[axe]);
+  const lo = Math.max(0, Math.min(40, Math.floor((Math.min(...vals)-10)/10)*10));
+  const X = i => P.l + i*(W-P.l-P.r)/(N-1), Y = v => P.t + (100-v)*(H-P.t-P.b)/(100-lo);
+  const pts = [];
+  for(let i=N-1;i>=0;i--){ const s = addDays(t,-i); if(hasData(D[s])) pts.push({x:X(N-1-i), y:Y(score(day(s))[axe]), v:score(day(s))[axe], s}); }
+  // courbe lissée (Catmull-Rom → Bézier)
+  let d = `M${pts[0].x},${pts[0].y}`;
+  for(let i=0;i<pts.length-1;i++){
+    const p0 = pts[i-1]||pts[i], p1 = pts[i], p2 = pts[i+1], p3 = pts[i+2]||p2;
+    const c1x = p1.x+(p2.x-p0.x)/6, c1y = p1.y+(p2.y-p0.y)/6, c2x = p2.x-(p3.x-p1.x)/6, c2y = p2.y-(p3.y-p1.y)/6;
+    d += ` C${c1x},${Math.min(H-P.b,Math.max(P.t,c1y))} ${c2x},${Math.min(H-P.b,Math.max(P.t,c2y))} ${p2.x},${p2.y}`;
+  }
+  const aire = d + ` L${pts[pts.length-1].x},${H-P.b} L${pts[0].x},${H-P.b} Z`;
+  const pas = (W-P.l-P.r)/(N-1), fs = Math.max(11, Math.min(20, pas*0.95));
+  const visage = v => v>=70 ? "😃" : v>=50 ? "😐" : "😟";
+  const y70 = Y(70);
+  const last = pts[pts.length-1], nl = niveau(last.v);
+  const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;border-radius:16px" role="img" aria-label="Évolution du score ${AXES[axe].nom}">
+    <defs>
+      <linearGradient id="fond" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#134e4a"/><stop offset="1" stop-color="#0b2f2c"/></linearGradient>
+      <linearGradient id="aire" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5eead4" stop-opacity=".45"/><stop offset="1" stop-color="#5eead4" stop-opacity="0"/></linearGradient>
+    </defs>
+    <rect x="0" y="0" width="${W}" height="${H}" fill="url(#fond)"/>
+    <line x1="${P.l}" x2="${W-P.r}" y1="${y70}" y2="${y70}" stroke="#a7f3d0" stroke-opacity=".55" stroke-dasharray="4 4"/>
+    <path d="${aire}" fill="url(#aire)"/>
+    <path d="${d}" fill="none" stroke="#99f6e4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    ${pts.map(p => `<g data-pt="${p.s}|${p.v}" style="cursor:pointer">
+      <rect x="${p.x-pas/2}" y="0" width="${pas}" height="${H}" fill="transparent"/>
+      <text x="${p.x}" y="${p.y-10}" font-size="${fs}" text-anchor="middle">${visage(p.v)}</text>
+      <circle cx="${p.x}" cy="${p.y}" r="5" fill="#ffffff" stroke="#14b8a6" stroke-width="3"/></g>`).join("")}
+    ${[[0,addDays(t,-(N-1))],[N-1,t]].map(([i,s],j)=>`<text x="${X(i)}" y="${H-10}" font-size="10" fill="#ccfbf1" text-anchor="${j?"end":"start"}">${parse(s).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</text>`).join("")}
+  </svg>`;
+  return svg + `<p id="ptInfo" class="muted" style="margin:8px 0 0">${esc(parse(last.s).toLocaleDateString("fr-FR",{weekday:"long", day:"numeric", month:"long"}))} : <b style="color:${nl.c}">${last.v}</b> · ${nl.t}</p>
+    <p class="muted" style="margin:4px 0 0;font-size:13px">😃 70 et plus · 😐 50 à 69 · 😟 moins de 50 · pointillés : objectif 70. Touchez un jour pour voir sa note.</p>`;
+}
 function chart(){
   const W = 340, H = 170, P = {l:28, r:8, t:8, b:22};
   const t = today(), pts = {sucre:[], chol:[], reins:[]};
@@ -1372,7 +1422,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 33</p>
+    <p class="muted">Version 34</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
