@@ -114,8 +114,8 @@ th:first-child,td:first-child{text-align:left}
 <div id="ov"></div>
 <div id="upd">Nouvelle version disponible <button id="updBtn">Mettre à jour</button></div>
 <nav>
-  <button data-t="jour" class="on"><span>📝</span>Aujourd’hui</button>
-  <button data-t="repas"><span>🍽️</span>Repas</button>
+  <button data-t="jour" class="on"><span>📊</span>Tableau de bord</button>
+  <button data-t="repas"><span>✍️</span>Saisie</button>
   <button data-t="bilan"><span>📈</span>Tendance</button>
   <button data-t="analyses"><span>🩸</span>Analyses</button>
   <button data-t="reglages"><span>⚙️</span>Réglages</button>
@@ -585,19 +585,7 @@ function bindDateBar(){
   document.getElementById("prev").onclick = () => { cur = addDays(cur,-1); render(); };
   document.getElementById("next").onclick = () => { if(cur<today()){ cur = addDays(cur,1); render(); } };
 }
-function rJour(){
-  const x = day(cur), r = score(x), filled = hasData(D[cur]), jr = hasJournal(x);
-  app.innerHTML = `
-  ${dateBar()}
-
-  <div class="card">
-    <h2>Score du jour</h2>
-    ${filled ? `<div class="scores">${Object.keys(AXES).map(a=>{ const n = niveau(r[a]); return `<div class="score" data-detail="${a}" style="background:${n.bg};cursor:pointer"><b style="color:${n.c}">${r[a]}</b><small>${AXES[a].nom}<br><span style="color:${n.c};font-weight:600">${n.t}</span></small></div>`; }).join("")}</div>
-    <p class="muted" style="margin:8px 0 0">🟢 70 et plus : bien · 🟠 50 à 69 : moyen · 🔴 moins de 50 : à améliorer<br>👆 <b>Touchez un score</b> pour voir le détail, aliment par aliment.</p>
-    <p class="muted" style="margin:8px 0 0">Objectif : 70 ou plus sur chaque ligne. Score global : <b>${r.global}</b>/100</p>`
-    : `<p class="muted" style="margin:0">Renseignez votre activité et vos repas ci-dessous.</p>`}
-  </div>
-
+function htmlActivite(x){ return `
   <div class="card">
     <h2>🚶 Activité</h2>
     <div class="row"><div class="lbl"><b>Marche</b><small>${x.marches.length?x.marches.length+" marche"+(x.marches.length>1?"s":"")+" · "+(x.marches.some(walkKm)?fmt(x.marches.reduce((t,w)=>t+walkKm(w),0),1)+" km · ":"")+x.marche+" min":"aucune pour l’instant"}</small></div></div>
@@ -617,8 +605,8 @@ function rJour(){
     <div class="row"><div class="lbl">Autre<small>vélo, jardinage, gym…</small></div>${stepper("autre", x.autre, 5, " min")}</div>
     <h3>Marche de 10 min après le repas</h3>
     <div class="chips">${["Matin","Midi","Soir"].map((t,i)=>`<button class="chip ${x.repas[i]?"on":""}" data-repas="${i}">${t}</button>`).join("")}</div>
-  </div>
-
+  </div>`; }
+function htmlEau(x){ return `
   <div class="card">
     <h2>💧 Eau</h2>
     <div class="row" style="display:block"><div class="lbl">Eau bue aujourd’hui<small>total de la journée · objectif ${fmt(S.eau,0)} ml</small></div>
@@ -633,8 +621,8 @@ function rJour(){
         return `<div class="bar" style="margin-top:8px"><i style="width:${Math.min(100,pct)}%;background:${pct>=100?"var(--good)":"var(--warn)"}"></i></div>
         <p class="muted" style="margin:0"><b>${pct} %</b> de votre objectif ${pct>=100?"✅":"· encore "+fmt(S.eau-ml,0)+" ml"}${ml>S.eau && ml<EAU_MAX?" · bonus jusqu’à 1,5 L":""}</p>`; })()}
     </div>
-  </div>
-
+  </div>`; }
+function htmlMeds(x){ return `
   <div class="card">
     <h2>💊 Médicaments et compléments</h2>
     ${x.med.length ? x.med.map((m,i) => { const d = MEDMAP[m.id]||MEDMAP.autre; const neg = Object.values(d.e).some(v=>v<0);
@@ -647,11 +635,11 @@ function rJour(){
       <input id="medTxt" type="text" placeholder="Préciser (nom du médicament…)" style="display:none;width:100%;margin-top:8px;padding:10px;font-size:17px;border:1px solid var(--line);border-radius:10px">
       <button class="btn" id="medAdd" style="margin-top:8px">Ajouter une prise</button>
     </div>
-  </div>
-
-  ${jr ? `<div class="tip" style="margin-bottom:12px">🍽️ Vos repas sont notés dans l’onglet <b>Repas</b> : c’est lui qui compte aujourd’hui.
+  </div>`; }
+function htmlQuick(x){ const jr = hasJournal(x); return `
+  ${jr ? `<div class="tip" style="margin-bottom:12px">🍽️ Vos repas sont détaillés dans les ronds <b>Repas</b> : ce sont eux qui comptent aujourd’hui.
       <button class="chip" id="showQuick" style="display:block;margin-top:8px;background:#fff">${quickOpen?"Masquer":"Afficher"} la liste rapide</button></div>`
-       : `<div class="tip" style="margin-bottom:12px"><b>Liste rapide</b>, pour les jours pressés : cochez en gros ce que vous avez mangé. Pour plus de précision (grammes, ordre du repas…), utilisez plutôt l’onglet <b>Repas</b>.</div>`}
+       : `<div class="tip" style="margin-bottom:12px"><b>Liste rapide</b>, pour les jours pressés : cochez en gros ce que vous avez mangé. Pour plus de précision (grammes, ordre du repas…), utilisez plutôt les ronds <b>Repas</b>.</div>`}
   <div class="${jr?"dim":""}" ${jr && !quickOpen ? 'style="display:none"' : ""}>
   <div class="card">
     <h2>✅ Ce qui aide</h2>
@@ -665,13 +653,55 @@ function rJour(){
     <p class="muted" style="margin:0 0 4px">Indiquez le nombre de fois dans la journée.</p>
     ${MOINS.map(it=>`<div class="row"><div class="lbl">${it.l}${it.s?`<small>${it.s}</small>`:""}</div>${stepper("m."+it.id, x.m[it.id]||0, 1)}</div>`).join("")}
   </div>
-  </div>
-  ${filled?`<div class="card"><h2>Ce qui a compté aujourd’hui</h2>${factorList(contributions(x))}</div>`:""}`;
+  </div>`; }
 
+/* ---------- Tableau de bord : uniquement les résultats ---------- */
+function rJour(){
+  const x = day(cur), r = score(x), filled = hasData(D[cur]), t = totals(x), jr = hasJournal(x);
+  const ml = eauMl(x), act = (x.marches||[]).reduce((s,w)=>s+walkMin(w),0) + x.piscine + x.autre;
+  app.innerHTML = `
+  ${dateBar()}
+  <div class="card">
+    <h2>Score du jour</h2>
+    ${filled ? `<div class="scores">${Object.keys(AXES).map(a=>{ const n = niveau(r[a]); return `<div class="score" data-detail="${a}" style="background:${n.bg};cursor:pointer"><b style="color:${n.c}">${r[a]}</b><small>${AXES[a].nom}<br><span style="color:${n.c};font-weight:600">${n.t}</span></small></div>`; }).join("")}</div>
+    <p class="muted" style="margin:8px 0 0">🟢 70 et plus : bien · 🟠 50 à 69 : moyen · 🔴 moins de 50 : à améliorer<br>👆 <b>Touchez un score</b> pour voir le détail, aliment par aliment.</p>`
+    : `<p class="muted" style="margin:0">Rien de noté pour ce jour. Remplissez l’onglet <b>✍️ Saisie</b> : repas, activité, eau…</p>
+       <button class="btn" id="goSaisie">Aller à la saisie</button>`}
+  </div>
+  ${filled ? `<div class="card">
+    <h2>Repères du jour</h2>
+    <div class="row"><div class="lbl">🚶 Activité</div><b>${act ? act+" min" : `<span class="muted" style="font-weight:400">pas encore notée</span>`}</b></div>
+    <div class="row"><div class="lbl">💧 Eau</div><b style="color:${!ml?"var(--muted)":ml>=S.eau?"var(--good)":"var(--warn)"};${!ml?"font-weight:400":""}">${ml ? fmt(ml,0)+" / "+fmt(S.eau,0)+" ml" : "pas encore notée"}</b></div>
+    ${jr ? NUTS.map(k => `<button class="nutbtn" data-nut="${k}"><div class="nut">${nutBar(NUTDEF[k].l+" ›", NUTDEF[k].tot(t), NUTDEF[k].lim(), NUTDEF[k].u, NUTDEF[k].dec, !!NUTDEF[k].obj)}</div></button>`).join("")
+      + `<p class="muted" style="margin:0">👆 Touchez une ligne pour voir d’où ça vient.</p>`
+      : `<p class="muted" style="margin:6px 0 0">Notez vos repas dans <b>✍️ Saisie</b> pour voir calories, sucres ajoutés, graisses saturées, sel et fibres.</p>`}
+  </div>
+  <div class="card"><h2>Ce qui a compté aujourd’hui</h2>${factorList(contributions(x))}</div>` : ""}`;
   bindDateBar();
-  bindDay();
   app.querySelectorAll("[data-detail]").forEach(b => b.onclick = () => openDetail(b.dataset.detail));
-  const sq = document.getElementById("showQuick"); if(sq) sq.onclick = () => { quickOpen = !quickOpen; const y = window.scrollY; render(); window.scrollTo(0,y); };
+  app.querySelectorAll("[data-nut]").forEach(b => b.onclick = () => openNutri(b.dataset.nut));
+  const gs = document.getElementById("goSaisie"); if(gs) gs.onclick = () => { tab = "repas"; render(); window.scrollTo(0,0); };
+}
+
+/* Sections de saisie ouvertes en plein écran */
+let ovRefresh = null;
+const SECTIONS = {
+  act:{titre:"🚶 Activité", html:htmlActivite},
+  eau:{titre:"💧 Eau", html:htmlEau},
+  med:{titre:"💊 Médicaments", html:htmlMeds},
+  quick:{titre:"⚡ Liste rapide", html:htmlQuick}
+};
+function openSection(k){
+  const x = day(cur), sec = SECTIONS[k], y = ov.querySelector(".body") ? ov.querySelector(".body").scrollTop : 0;
+  document.body.style.overflow = "hidden";
+  ov.innerHTML = `<div class="top"><button id="ovx">‹ Saisie</button><b style="flex:1;text-align:center">${sec.titre}</b><span style="width:60px"></span></div>
+    <div class="body"><div style="margin-top:12px">${sec.html(x).replace(/<h2>[^<]*<\/h2>/,"")}</div></div>`;
+  ov.classList.add("on");
+  if(ovRefresh && ovRefresh.k===k) ov.querySelector(".body").scrollTop = y;
+  ovRefresh = () => openSection(k); ovRefresh.k = k;
+  document.getElementById("ovx").onclick = () => { closeOv(); render(); };
+  bindDay(ov);
+  const sq = ov.querySelector("#showQuick"); if(sq) sq.onclick = () => { quickOpen = !quickOpen; openSection(k); };
 }
 
 function edit(fn){
@@ -679,16 +709,19 @@ function edit(fn){
   if(hasData(x)) D[cur] = x; else delete D[cur];
   save();
   const y = window.scrollY; render(); window.scrollTo(0,y);
+  if(ovRefresh) ovRefresh();
 }
-function bindDay(){
-  app.querySelectorAll("[data-step]").forEach(b => b.onclick = () => edit(x => {
+function bindDay(root){
+  root = root || app;
+  const $ = id => root.querySelector("#"+id);
+  root.querySelectorAll("[data-step]").forEach(b => b.onclick = () => edit(x => {
     const [a,k] = b.dataset.step.split("."); const d = Number(b.dataset.d);
     if(k){ x[a][k] = Math.max(0, (x[a][k]||0)+d); } else { x[a] = Math.max(0, x[a]+d); }
   }));
-  app.querySelectorAll("[data-add]").forEach(b => b.onclick = () => edit(x => { x[b.dataset.add] += Number(b.dataset.v); }));
-  app.querySelectorAll("[data-tog]").forEach(b => b.onclick = () => edit(x => { const [a,k] = b.dataset.tog.split("."); x[a][k] = !x[a][k]; }));
-  app.querySelectorAll("[data-repas]").forEach(b => b.onclick = () => edit(x => { const i = +b.dataset.repas; x.repas = x.repas.slice(); x.repas[i] = !x.repas[i]; }));
-  const wkm = document.getElementById("wkm"), wmin = document.getElementById("wmin"), wprev = document.getElementById("wprev");
+  root.querySelectorAll("[data-add]").forEach(b => b.onclick = () => edit(x => { x[b.dataset.add] += Number(b.dataset.v); }));
+  root.querySelectorAll("[data-tog]").forEach(b => b.onclick = () => edit(x => { const [a,k] = b.dataset.tog.split("."); x[a][k] = !x[a][k]; }));
+  root.querySelectorAll("[data-repas]").forEach(b => b.onclick = () => edit(x => { const i = +b.dataset.repas; x.repas = x.repas.slice(); x.repas[i] = !x.repas[i]; }));
+  const wkm = $("wkm"), wmin = $("wmin"), wprev = $("wprev");
   const num = v => { const n = parseFloat(String(v).replace(",",".")); return n>0 ? n : 0; };
   const prev = () => {
     WD.km = wkm.value; WD.min = wmin.value;
@@ -696,9 +729,9 @@ function bindDay(){
     wprev.textContent = m ? (k ? "Durée retenue : "+Math.round(m)+" min ("+fmt(k/(m/60),1)+" km/h)" : "Durée retenue : "+Math.round(m)+" min")
                       : k ? "≈ "+Math.round(k*PACE[WD.al])+" min estimées (allure "+ALLURE[WD.al]+" : "+PACE[WD.al]+" min par km)" : "Indiquez la distance, la durée, ou les deux.";
   };
-  wkm.oninput = prev; wmin.oninput = prev; prev();
-  app.querySelectorAll("[data-wal]").forEach(b => b.onclick = () => { WD.al = b.dataset.wal; prev(); app.querySelectorAll("[data-wal]").forEach(c=>c.classList.toggle("on", c===b)); prev(); });
-  document.getElementById("wadd").onclick = () => {
+  if(wkm){ wkm.oninput = prev; wmin.oninput = prev; prev(); }
+  root.querySelectorAll("[data-wal]").forEach(b => b.onclick = () => { WD.al = b.dataset.wal; prev(); root.querySelectorAll("[data-wal]").forEach(c=>c.classList.toggle("on", c===b)); prev(); });
+  if($("wadd")) $("wadd").onclick = () => {
     const k = num(wkm.value), m = num(wmin.value);
     if(!k && !m){ alert("Indiquez la distance ou la durée."); return; }
     const w = {al:WD.al}; if(k) w.km = Math.round(k*100)/100; if(m) w.min = Math.round(m);
@@ -706,20 +739,20 @@ function bindDay(){
     edit(x => { x.marches.push(w); });
   };
   const setEau = v => edit(x => { x.eauMl = Math.max(0, Math.min(5000, Math.round(v))); delete x.eauNiv; delete x.p.eau; if(!x.eauMl) delete x.eauMl; });
-  const eauIn = document.getElementById("eauIn");
-  eauIn.onchange = () => { const v = parseFloat(eauIn.value.replace(/\s/g,"").replace(",",".")); setEau(v>0 ? v : 0); };
-  const medSel = document.getElementById("medSel"), medTxt = document.getElementById("medTxt");
-  medSel.onchange = () => { medTxt.style.display = medSel.value==="autre" ? "block" : "none"; };
-  document.getElementById("medAdd").onclick = () => {
+  const eauIn = $("eauIn");
+  if(eauIn) eauIn.onchange = () => { const v = parseFloat(eauIn.value.replace(/\s/g,"").replace(",",".")); setEau(v>0 ? v : 0); };
+  const medSel = $("medSel"), medTxt = $("medTxt");
+  if(medSel) medSel.onchange = () => { medTxt.style.display = medSel.value==="autre" ? "block" : "none"; };
+  if($("medAdd")) $("medAdd").onclick = () => {
     const id = medSel.value; if(!id){ alert("Choisissez dans la liste."); return; }
     const m = {id}; if(id==="autre"){ const t = medTxt.value.trim(); if(!t){ alert("Précisez le nom."); return; } m.txt = t.slice(0,60); }
     edit(x => { x.med.push(m); });
   };
-  app.querySelectorAll("[data-delmed]").forEach(b => b.onclick = () => edit(x => { x.med.splice(+b.dataset.delmed,1); }));
-  app.querySelectorAll("[data-eaud]").forEach(b => b.onclick = () => setEau(eauMl(day(cur)) + +b.dataset.eaud));
-  app.querySelectorAll("[data-qw]").forEach(b => b.onclick = () => edit(x => { x.marches.push({min:+b.dataset.qw, al:"n"}); }));
-  app.querySelectorAll("[data-delw]").forEach(b => b.onclick = () => edit(x => { x.marches.splice(+b.dataset.delw,1); }));
-  app.querySelectorAll("[data-avo]").forEach(b => b.onclick = () => edit(x => { x.avocat = Number(b.dataset.avo); }));
+  root.querySelectorAll("[data-delmed]").forEach(b => b.onclick = () => edit(x => { x.med.splice(+b.dataset.delmed,1); }));
+  root.querySelectorAll("[data-eaud]").forEach(b => b.onclick = () => setEau(eauMl(day(cur)) + +b.dataset.eaud));
+  root.querySelectorAll("[data-qw]").forEach(b => b.onclick = () => edit(x => { x.marches.push({min:+b.dataset.qw, al:"n"}); }));
+  root.querySelectorAll("[data-delw]").forEach(b => b.onclick = () => edit(x => { x.marches.splice(+b.dataset.delw,1); }));
+  root.querySelectorAll("[data-avo]").forEach(b => b.onclick = () => edit(x => { x.avocat = Number(b.dataset.avo); }));
 }
 
 /* ---------- Détail d'un score : points par aliment et par activité ---------- */
@@ -743,7 +776,7 @@ function reperes(x, axe){
   const g = (v,d=0) => fmt(v,d)+" g";
   if(axe==="reins"){
     const ml = eauMl(x);
-    out.push(["Eau", ml ? fmt(ml,0)+" ml / objectif "+fmt(S.eau,0)+" ml "+(ml>=S.eau?"✅":"(sous l’objectif)") : "pas encore saisie : notez-la dans Aujourd’hui → Eau", ml ? ml>=S.eau : null]);
+    out.push(["Eau", ml ? fmt(ml,0)+" ml / objectif "+fmt(S.eau,0)+" ml "+(ml>=S.eau?"✅":"(sous l’objectif)") : "pas encore saisie : notez-la dans Saisie → Eau", ml ? ml>=S.eau : null]);
     if(jr) out.push(["Sel", g(t.sel,1)+" / repère 6 g "+(t.sel<=LIM.sel?"✅":"(dépassé)"), t.sel<=LIM.sel]);
     if(!(x.med||[]).some(m => MEDMAP[m.id] && Object.keys(MEDMAP[m.id].e).length)) out.push(["Médicaments qui fatiguent les reins", "aucun ✅", true]);
   }
@@ -757,7 +790,7 @@ function reperes(x, axe){
     out.push(["Poisson gras", t.o3>0 ? g(t.o3)+" / repère 80 g "+(t.o3>=80?"✅":"") : "aucun aujourd’hui", t.o3>=80 ? true : null]);
     out.push(["Fibres", g(t.fib)+" / objectif 25 g "+(t.fib>=LIM.fib?"✅":""), t.fib>=LIM.fib ? true : null]);
   }
-  if(!jr && axe!=="reins") out.push(["Repas", "notez-les dans l’onglet Repas pour le détail", null]);
+  if(!jr && axe!=="reins") out.push(["Repas", "notez-les dans l’onglet Saisie pour le détail", null]);
   return out;
 }
 function detailSemaine(axe){
@@ -786,7 +819,7 @@ function openDetail(axe, semaine){
     ${plus.length?`<h3 style="color:var(--good)">Font monter</h3>${plus.map(ligne).join("")}`:""}
     ${moins.length?`<h3 style="color:var(--bad)">Font baisser</h3>${moins.map(ligne).join("")}`:""}
     ${!list.length?`<p class="muted">Rien n’a encore modifié ce score aujourd’hui.</p>`:""}
-    ${semaine ? `<p class="muted" style="margin:10px 0 0">Points moyens par jour, sur ${ws.n} jour${ws.n>1?"s":""} renseigné${ws.n>1?"s":""}. Pour le détail d’une journée précise, touchez le score dans l’onglet Aujourd’hui.</p>` : ""}
+    ${semaine ? `<p class="muted" style="margin:10px 0 0">Points moyens par jour, sur ${ws.n} jour${ws.n>1?"s":""} renseigné${ws.n>1?"s":""}. Pour le détail d’une journée précise, touchez le score dans le Tableau de bord.</p>` : ""}
     ${semaine ? "" : (()=>{ const rp = reperes(x, axe); return rp.length ? `<h3>Repères du jour</h3>${rp.map(([l,v,ok])=>`<div class="row"><div class="lbl">${l}</div><span style="color:${ok===true?"var(--good)":ok===false?"var(--bad)":"var(--warn)"};text-align:right">${v}</span></div>`).join("")}` : ""; })()}
     <div class="row" style="border-top:2px solid var(--line);margin-top:6px"><div class="lbl"><b>${semaine?"Moyenne de la semaine":"Score du jour"}</b>
       ${brut>100||brut<0?`<small>${fmt(BASE[axe],0)} ${somme>=0?"+":"−"} ${Math.round(Math.abs(somme))} = ${Math.round(brut)}, ramené entre 0 et 100</small>`:`<small>${BASE[axe]} ${somme>=0?"+":"−"} ${fmt(Math.abs(somme),0)}</small>`}</div>
@@ -824,7 +857,7 @@ function bindMeal(root){
 function openMeal(m){
   const x = day(cur), b = BULLES[m], mt = totals(x, m), n = (x.j[m]||[]).length;
   document.body.style.overflow = "hidden";
-  ov.innerHTML = `<div class="top"><button id="ovx">‹ Repas</button><b style="flex:1;text-align:center">${MEALS.find(z=>z[0]===m)[1]}</b><span style="width:60px;text-align:right" class="muted">${n?Math.round(mt.kcal)+" kcal":""}</span></div>
+  ov.innerHTML = `<div class="top"><button id="ovx">‹ Saisie</button><b style="flex:1;text-align:center">${MEALS.find(z=>z[0]===m)[1]}</b><span style="width:60px;text-align:right" class="muted">${n?Math.round(mt.kcal)+" kcal":""}</span></div>
     <div class="body"><div class="card meal" style="margin-top:12px">${mealHTML(x, m)}</div>
     <div class="tip">🛡️ <b>Ajoutez les aliments dans l’ordre où vous les mangez.</b> Les légumes puis les protéines mangés <b>avant</b> le sucré ralentissent l’arrivée du sucre dans le sang. Touchez un aliment pour changer la quantité, l’ordre ou le supprimer.</div></div>`;
   ov.classList.add("on");
@@ -848,7 +881,7 @@ function openNutri(k){
   const dec = d.dec || (k==="sel"?1:0);
   const depasse = !d.obj && tot>lim;
   document.body.style.overflow = "hidden";
-  ov.innerHTML = `<div class="top"><button id="ovx">‹ Repas</button><b style="flex:1;text-align:center">${d.l.replace(" (objectif)","")}</b><span style="width:60px"></span></div>
+  ov.innerHTML = `<div class="top"><button id="ovx">‹ Retour</button><b style="flex:1;text-align:center">${d.l.replace(" (objectif)","")}</b><span style="width:60px"></span></div>
   <div class="body"><div class="card" style="margin-top:12px">
     <div class="row"><div class="lbl"><b>Total de la journée</b><small>${d.obj?"objectif":"maximum conseillé"} : ${fmt(lim,dec)} ${d.u}</small></div>
       <b style="font-size:20px;color:${depasse?"var(--bad)":d.obj&&tot>=lim?"var(--good)":"var(--ink)"}">${fmt(tot,dec)} ${d.u}</b></div>
@@ -862,36 +895,47 @@ function openNutri(k){
   ov.classList.add("on");
   document.getElementById("ovx").onclick = () => { closeOv(); render(); };
 }
+/* ---------- Saisie : tout ce qu'on remplit, en ronds colorés ---------- */
+const BULLES2 = {act:{ico:"🚶", nom:"Activité", g:"linear-gradient(160deg,#8a6cf0,#b9a3f8)"},
+                 eau:{ico:"💧", nom:"Eau", g:"linear-gradient(160deg,#1fb8dc,#71dcef)"},
+                 med:{ico:"💊", nom:"Médicaments", g:"linear-gradient(160deg,#e0609f,#f29cc6)"}};
 function rRepas(){
-  const x = day(cur), t = totals(x);
+  const x = day(cur);
+  const rond = (k, b, contenu, vide) => `<button class="mrow" data-${k.startsWith("m:")?"meal":"sec"}="${k.replace(/^m:/,"")}">
+      <span class="bulle" style="background:${b.g}${b.nom.length>9?";font-size:13px":""}"><span class="ico">${b.ico}</span>${b.nom}</span>
+      <span class="mtxt">${contenu || `<span class="vide">${vide||"(Vide)"}</span>`}</span></button>`;
+  const repas = MEALS.map(([m]) => {
+    const items = (x.j[m]||[]).filter(it=>FOODS[it.f]), mt = totals(x, m);
+    const noms = items.map(it => FOODS[it.f].n.replace(/ \(.*\)$/,"").replace(/ \/.*$/,"").replace(/ – .*$/,""));
+    const resume = noms.length ? `<span>${esc(noms.slice(0,5).join(", ")) + (noms.length>5 ? "…" : "")}</span><span class="k">${Math.round(mt.kcal)} kcal</span>` : "";
+    return rond("m:"+m, BULLES[m], resume, "(Vide)"+(lastMeal(m)?" · touchez pour reprendre celui "+esc(lastMeal(m).lbl):""));
+  }).join("");
+  const km = (x.marches||[]).reduce((t,w)=>t+walkKm(w),0), mn = (x.marches||[]).reduce((t,w)=>t+walkMin(w),0);
+  const actTxt = [mn ? "Marche "+(km?fmt(km,1)+" km · ":"")+mn+" min" : "", x.piscine ? "Piscine "+x.piscine+" min" : "", x.autre ? "Autre "+x.autre+" min" : "",
+                  x.repas.some(Boolean) ? "Après repas : "+["matin","midi","soir"].filter((_,i)=>x.repas[i]).join(", ") : ""].filter(Boolean);
+  const ml = eauMl(x);
+  const meds = {}; (x.med||[]).forEach(m => { const nm = m.id==="autre" && m.txt ? m.txt : (MEDMAP[m.id]||MEDMAP.autre).l.replace(/ \(.*\)$/,""); meds[nm] = (meds[nm]||0)+1; });
+  const medTxt = Object.entries(meds).map(([n,c]) => n+(c>1?" ×"+c:""));
   app.innerHTML = `
   ${dateBar()}
+  <h3 style="margin:4px 4px 6px">Repas</h3>
+  <div class="repasfond">${repas}</div>
+  <h3 style="margin:4px 4px 6px">Au quotidien</h3>
   <div class="repasfond">
-  ${MEALS.map(([m]) => {
-    const b = BULLES[m], items = (x.j[m]||[]).filter(it=>FOODS[it.f]), mt = totals(x, m);
-    const noms = items.map(it => FOODS[it.f].n.replace(/ \(.*\)$/,"").replace(/ \/.*$/,""));
-    const resume = noms.length ? esc(noms.slice(0,5).join(", ")) + (noms.length>5 ? "…" : "") : "";
-    return `<button class="mrow" data-meal="${m}">
-      <span class="bulle" style="background:${b.g}"><span class="ico">${b.ico}</span>${b.nom}</span>
-      <span class="mtxt">${resume ? `<span>${resume}</span><span class="k">${Math.round(mt.kcal)} kcal</span>` : `<span class="vide">(Vide)${lastMeal(m)?" · touchez pour reprendre celui "+esc(lastMeal(m).lbl):""}</span>`}</span>
-    </button>`;
-  }).join("")}
+    ${rond("act", BULLES2.act, actTxt.length ? actTxt.map(t=>`<span>${esc(t)}</span>`).join("") : "", "Rien de noté · touchez pour ajouter une marche")}
+    ${rond("eau", BULLES2.eau, ml ? `<span>${fmt(ml,0)} / ${fmt(S.eau,0)} ml</span><span class="k" style="color:${ml>=S.eau?"var(--good)":"var(--warn)"}">${Math.round(ml/S.eau*100)} % de l’objectif</span>` : "", "Pas encore notée")}
+    ${rond("med", BULLES2.med, medTxt.length ? `<span>${esc(medTxt.join(", "))}</span>` : "", "Rien de noté")}
   </div>
-  <div class="card">
-    <h2>Total de la journée</h2>
-    ${NUTS.map(k => `<button class="nutbtn" data-nut="${k}"><div class="nut">${nutBar(NUTDEF[k].l+" ›", NUTDEF[k].tot(t), NUTDEF[k].lim(), NUTDEF[k].u, NUTDEF[k].dec, !!NUTDEF[k].obj)}</div></button>`).join("")}
-    <p class="muted" style="margin:0 0 6px">👆 Touchez une ligne pour voir d’où ça vient.</p>
-    <p class="muted" style="margin:0">Sucres au total ${fmt(t.suc,0)} g (dont fruits et laitages nature) · Protéines ${fmt(t.prot,0)} g · Glucides ${fmt(t.gluc,0)} g · Lipides ${fmt(t.lip,0)} g</p>
-  </div>
-  <p class="muted">Valeurs moyennes approximatives, d’après les tables de composition françaises.</p>`;
+  <button class="add" data-sec="quick" style="background:#fff">⚡ Pas le temps de détailler les repas ? Liste rapide</button>
+  <p class="muted">Les résultats (scores, calories, sel…) sont dans l’onglet <b>📊 Tableau de bord</b>.</p>`;
   bindDateBar();
   app.querySelectorAll("[data-meal]").forEach(b => b.onclick = () => openMeal(b.dataset.meal));
-  app.querySelectorAll("[data-nut]").forEach(b => b.onclick = () => openNutri(b.dataset.nut));
+  app.querySelectorAll("[data-sec]").forEach(b => b.onclick = () => openSection(b.dataset.sec));
 }
 
 const ov = document.getElementById("ov");
 const norm = s => s.toLowerCase().replace(/œ/g,"oe").replace(/æ/g,"ae").replace(/[’']/g," ").normalize("NFD").replace(/[̀-ͯ]/g,"");
-function closeOv(){ ov.classList.remove("on"); ov.innerHTML = ""; document.body.style.overflow = ""; }
+function closeOv(){ ovRefresh = null; ov.classList.remove("on"); ov.innerHTML = ""; document.body.style.overflow = ""; }
 function openSearch(meal){
   document.body.style.overflow = "hidden";
   ov.innerHTML = `<div class="top"><input id="q" type="search" placeholder="Chercher un aliment…" autocomplete="off"><button id="ovx">Annuler</button></div>
@@ -1127,7 +1171,7 @@ function factorList(list){
   const force = v => { const a = Math.abs(v); return a>=10 ? "●●●" : a>=4 ? "●●○" : "●○○"; };
   const NOMS = {sucre:"la glycémie", chol:"le cholestérol", reins:"les reins"};
   const line = c => {
-    const ax = Object.keys(c.e).filter(a => Math.abs(c.e[a])>=1).sort((a,b)=>Math.abs(c.e[b])-Math.abs(c.e[a]));
+    const ax = Object.keys(c.e).filter(a => Math.abs(c.e[a])>=0.3).sort((a,b)=>Math.abs(c.e[b])-Math.abs(c.e[a]));
     const good = c.v>0;
     return `<div class="row"><div class="lbl">${esc(c.l)}<small>${good?"Bon pour":"Mauvais pour"} : ${ax.map(a=>`${NOMS[a]} <span style="color:${good?"var(--good)":"var(--bad)"};letter-spacing:1px">${force(c.e[a])}</span>`).join(" · ")}</small>${good?"":causes(c)}</div></div>`;
   };
@@ -1314,7 +1358,7 @@ function rReglages(){
   <div class="card">
     <h2>Mes produits</h2>
     ${(S.perso||[]).length ? S.perso.map(p=>`<div class="row"><div class="lbl">${esc(p.n)}<small>${Math.round(p.kcal)} kcal · sat. ${fmt(p.ags,1)} g · sucres ${fmt(p.suc,1)} g · sel ${fmt(p.sel,2)} g (pour 100 g)</small></div><button class="chip" data-delp="${esc(p.id)}">Suppr.</button></div>`).join("")
-      : `<p class="muted" style="margin:0">Aucun pour l’instant. Ajoutez-en depuis Repas → Ajouter un aliment → 📷 Scanner ou ✏️ Saisir une étiquette.</p>`}
+      : `<p class="muted" style="margin:0">Aucun pour l’instant. Ajoutez-en depuis Saisie → un repas → Ajouter un aliment → 📷 Scanner ou ✏️ Saisir une étiquette.</p>`}
   </div>
   <div class="card">
     <h2>Sauvegarde</h2>
@@ -1327,8 +1371,8 @@ function rReglages(){
     <h2>Comment est calculé le score ?</h2>
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
-    <p class="muted">Si vous remplissez l’onglet Repas, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 32</p>
+    <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
+    <p class="muted">Version 33</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
