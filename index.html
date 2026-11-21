@@ -603,6 +603,12 @@ function ring(v, col, extra){
     <text x="42" y="${extra?46:49}" text-anchor="middle" font-size="22" font-weight="800" fill="#fff">${Math.round(v)}</text>${extra?`<text x="42" y="62" text-anchor="middle" font-size="12" fill="${col}">${extra}</text>`:""}</svg>`;
 }
 /* Couleur selon la note : vert = bon, orange = moyen, rouge = à améliorer */
+/* Le matin, un score « moyen » sans rien de négatif veut juste dire que la journée n'est pas finie */
+function enCours(x, a, v){
+  if(cur!==today() || v<50 || v>=70) return null;
+  if(contributions(x).some(c => (c.e[a]||0) < -0.05)) return null;
+  return {c:"#6fb6ff", bg:"rgba(111,182,255,.10)", t:"journée en cours"};
+}
 function niveau(v){ return v>=70 ? {c:"var(--good)", bg:"var(--good-l)", t:"bien"} : v>=50 ? {c:"var(--warn)", bg:"var(--warn-l)", t:"moyen"} : {c:"var(--bad)", bg:"var(--bad-l)", t:"à améliorer"}; }
 function dateBar(){
   const isToday = cur===today();
@@ -694,8 +700,8 @@ function rJour(){
   ${dateBar()}
   <div class="card">
     <h2>Score du jour</h2>
-    ${filled ? `<div class="scores">${Object.keys(AXES).map(a=>{ const n = niveau(r[a]); return `<div class="score" data-detail="${a}" style="background:${n.bg};cursor:pointer">${ring(r[a], n.c)}<small>${AXES[a].nom}<br><span style="color:${n.c};font-weight:600">${n.t}</span></small></div>`; }).join("")}</div>
-    <p class="muted" style="margin:8px 0 0">🟢 70 et plus : bien · 🟠 50 à 69 : moyen · 🔴 moins de 50 : à améliorer<br>👆 <b>Touchez un score</b> pour voir le détail, aliment par aliment.</p>`
+    ${filled ? `<div class="scores">${Object.keys(AXES).map(a=>{ const n = enCours(x, a, r[a]) || niveau(r[a]); return `<div class="score" data-detail="${a}" style="background:${n.bg};cursor:pointer">${ring(r[a], n.c)}<small>${AXES[a].nom}<br><span style="color:${n.c};font-weight:600">${n.t}</span></small></div>`; }).join("")}</div>
+    <p class="muted" style="margin:8px 0 0">🟢 70 et plus : bien · 🟠 50 à 69 : moyen · 🔴 moins de 50 : à améliorer${cur===today()?"<br>🔵 journée en cours : rien de négatif, la marche et les fibres feront monter le score":""}<br>👆 <b>Touchez un score</b> pour voir le détail, aliment par aliment.</p>`
     : `<p class="muted" style="margin:0">Rien de noté pour ce jour. Remplissez l’onglet <b>✍️ Saisie</b> : repas, activité, eau…</p>
        <button class="btn" id="goSaisie">Aller à la saisie</button>`}
   </div>
@@ -1574,7 +1580,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 45</p>
+    <p class="muted">Version 46</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
