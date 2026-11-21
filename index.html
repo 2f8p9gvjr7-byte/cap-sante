@@ -273,12 +273,15 @@ const FOODS_RAW = [
  ["raisin","Raisin","Fruits",70,0.6,16,16,1,0.2,0,0,[["1 grappe",125]],{}],
  ["fraises","Fraises","Fruits",35,0.6,6,5,2,0.3,0,0,[["1 barquette",150]],{}],
  ["dattes","Dattes","Fruits",290,2.5,65,64,7,0.4,0.1,0,[["1 datte",8],["3 dattes",24]],{}],
+ ["pruneaux","Pruneaux","Fruits",240,2.2,57,38,7,0.4,0.1,0,[["3 pruneaux",30],["5 pruneaux",50]],{}],
  ["compote","Compote sans sucre ajouté","Fruits",65,0.3,14,12,1.5,0.2,0,0,[["1 pot",100]],{}],
  ["compote_s","Compote sucrée","Fruits",85,0.2,20,18,1.5,0.2,0,0,[["1 pot",100]],{}],
  // Fruits à coque
  ["noix","Noix","Fruits à coque",700,15,7,2.6,6.7,65,6,0,[["1 poignée",30]],{}],
  ["amandes","Amandes","Fruits à coque",630,25,7,4,12,53,4,0,[["1 poignée",30]],{}],
  ["cacahuetes","Cacahuètes salées","Fruits à coque",600,25,12,4,8,49,8,1,[["1 poignée",30]],{}],
+ ["psyllium","Psyllium blond (téguments)","Compléments",200,1.5,4,0,85,0.6,0.1,0.1,[["1 c. à café",4],["1 sachet",5],["1 c. à soupe",8]],{}],
+ ["spiruline","Spiruline (poudre ou comprimés)","Compléments",290,57,24,3,3.6,8,2.6,2.6,[["1 c. à café",3],["6 comprimés de 500 mg",3]],{}],
  // Laitiers
  ["lait","Lait demi-écrémé","Produits laitiers",46,3.3,4.8,4.8,0,1.6,1,0.1,[["1 bol",250],["1 verre",200]],{}],
  ["yaourt","Yaourt nature","Produits laitiers",55,4.2,5,5,0,1.8,1.1,0.1,[["1 pot",125]],{}],
@@ -1571,7 +1574,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 42</p>
+    <p class="muted">Version 44</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
