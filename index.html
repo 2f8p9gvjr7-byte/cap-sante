@@ -462,6 +462,23 @@ function registerPerso(){
     por:[[p.pl||"1 portion", +p.pg||100], ["100 g",100]], o:Object.assign({}, p.o3?{o3:1}:{}, p.ig?{ig:0.5}:{}), lib: typeof p.lib==="number" ? p.lib : (p.lib?1:0)}; });
 }
 registerPerso();
+/* Table Ciqual (Anses) : ~3 300 aliments, chargée seulement quand on cherche.
+   Les aliments choisis sont gardés dans S.ciq pour s'afficher sans recharger la table. */
+let CIQ = null, ciqLoad = null;
+function ciqFood(r){ const o = Object.assign({}, r[11]); const lib = o.lib||0; delete o.lib;
+  return {id:r[0], n:r[1], c:"Ciqual · "+r[2], kcal:r[3], prot:r[4], gluc:r[5], suc:r[6], fib:r[7], lip:r[8], ags:r[9], sel:r[10], por:[["100 g",100],["50 g",50],["30 g",30]], o, lib}; }
+function registerCiq(){ (S.ciq||[]).forEach(r => { FOODS[r[0]] = ciqFood(r); }); }
+function loadCiq(){
+  if(!ciqLoad) ciqLoad = fetch("aliments.json").then(r => r.json()).then(j => { CIQ = j.foods.map(r => ({r, t:norm(r[1])})); })
+    .catch(() => { ciqLoad = null; });
+  return ciqLoad;
+}
+registerCiq();
+function keepCiq(id){
+  if(!/^c\d/.test(id) || (S.ciq||[]).some(r => r[0]===id) || !CIQ) return;
+  const x = CIQ.find(c => c.r[0]===id); if(!x) return;
+  S.ciq = (S.ciq||[]).concat([x.r]); save(); FOODS[id] = ciqFood(x.r);
+}
 
 /* ---------- Outils ---------- */
 const pad = n => String(n).padStart(2,"0");
@@ -1035,7 +1052,7 @@ function openSearch(meal, rep){
   document.getElementById("goLabel").onclick = () => openLabel(meal, {});
   ov.classList.add("on");
   const q = document.getElementById("q"), res = document.getElementById("res");
-  const line = f => `<button class="item" data-f="${f.id}"><span>${esc(f.n)}<small>${f.por[0][0]} (${f.por[0][1]} g)</small></span><span class="k muted">${Math.round(f.kcal)} kcal/100 g</span></button>`;
+  const line = f => `<button class="item" data-f="${f.id}"><span>${esc(f.n)}<small>${f.por[0][0]===f.por[0][1]+" g" ? f.por[0][0] : f.por[0][0]+" ("+f.por[0][1]+" g)"}</small></span><span class="k muted">${Math.round(f.kcal)} kcal/100 g</span></button>`;
   const show = () => {
     const s = norm(q.value.trim());
     let html = "";
@@ -1047,13 +1064,24 @@ function openSearch(meal, rep){
       let c = "";
       FOODS_RAW.forEach(r => { const f = FOODS[r[0]]; if(f.c!==c){ c = f.c; html += `<div class="cat">${c}</div>`; } html += line(f); });
     } else {
-      const sing = w => w.length>3 ? w.replace(/(s|x)$/,"") : w;
-      const words = s.split(/\s+/).map(sing);
+      const sing = w => w.length>3 ? w.replace(/s$/,"").replace(/(au|eu|ou)x$/,"$1") : w;
+      const VIDES = ["de","du","des","la","le","les","au","aux","a","en","et","d","l","un","une"];
+      let words = s.split(/\s+/).filter(w => w && !VIDES.includes(w)).map(sing);
+      if(!words.length) words = [s];
       const hits = Object.values(FOODS).filter(f => { const t = norm(f.n+" "+f.c); return words.every(w => t.includes(w)); });
-      html = hits.length ? hits.map(line).join("") : `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou ajoutez le produit avec <b>📷 Scanner un code-barres</b> ou <b>📋 Lire une étiquette</b>.</p>`;
+      html = hits.map(line).join("");
+      if(CIQ){
+        const ch = CIQ.filter(c => !FOODS[c.r[0]] && words.every(w => c.t.includes(w)))
+          .sort((a,b) => (a.t.startsWith(words[0])?0:1) - (b.t.startsWith(words[0])?0:1) || a.t.length - b.t.length).slice(0, 40);
+        if(ch.length) html += `<div class="cat">Table Ciqual (Anses) · ${ch.length>=40?"40 premiers":ch.length} résultat${ch.length>1?"s":""}</div>` + ch.map(c => line(ciqFood(c.r))).join("");
+      } else {
+        html += `<p class="muted">Recherche dans la table Ciqual…</p>`;
+        const v = q.value; loadCiq().then(() => { if(q.value===v && CIQ) show(); });
+      }
+      if(CIQ && !html.includes("data-f")) html = `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou ajoutez le produit avec <b>📷 Scanner un code-barres</b> ou <b>📋 Lire une étiquette</b>.</p>`;
     }
     res.innerHTML = html;
-    res.querySelectorAll("[data-f]").forEach(b => b.onclick = () => rep ? openQty(meal, b.dataset.f, rep.g, rep.idx) : openQty(meal, b.dataset.f, FOODS[b.dataset.f].por[0][1], -1));
+    res.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { keepCiq(b.dataset.f); rep ? openQty(meal, b.dataset.f, rep.g, rep.idx) : openQty(meal, b.dataset.f, FOODS[b.dataset.f].por[0][1], -1); });
   };
   q.oninput = show; show();
   document.getElementById("ovx").onclick = () => openMeal(meal);
@@ -1674,7 +1702,8 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 53</p>
+    <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
+    <p class="muted">Version 54</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
@@ -1706,7 +1735,7 @@ document.getElementById("fileIn").onchange = e => {
       const j = JSON.parse(r.result); let n = 0;
       if(j.days && typeof j.days==="object"){ Object.assign(D, j.days); n++; }
       if(Array.isArray(j.labs)){ j.labs.forEach(e => { if(e && e.date){ L = L.filter(x=>x.date!==e.date).concat([e]); } }); n++; }
-      if(j.settings && typeof j.settings==="object"){ Object.assign(S, j.settings); registerPerso(); n++; }
+      if(j.settings && typeof j.settings==="object"){ Object.assign(S, j.settings); registerPerso(); registerCiq(); n++; }
       if(!n) throw 0;
       save(); alert("Import réussi."); render();
     }catch(err){ alert("Ce fichier n’est pas reconnu."); }
