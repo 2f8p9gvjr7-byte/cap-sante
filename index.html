@@ -1152,7 +1152,8 @@ function openScan(meal){
 /* Lecture du texte d'une étiquette (copié ou scanné par l'iPhone) */
 function lireEtiquette(txt){
   let t = (" "+txt+" ").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")
-    .replace(/[|\[\]{}]/g," ").replace(/(\d)\s*,\s*(\d)/g,"$1.$2").replace(/[ \t]+/g," ");
+    .replace(/[|\[\]{}]/g," ").replace(/(\d)\s*,\s*(\d)/g,"$1.$2").replace(/[ \t]+/g," ")
+    .replace(/(^|[\s<])o\s?g(?=[\s%]|$)/gm, "$1 0 g");
   const res = {};
   // retirer la liste des ingrédients (« sucre », « sel », « matière grasse »… y apparaissent aussi)
   // (si le tableau suit la liste, on l'enlève jusqu'au tableau ; sinon seulement jusqu'à la fin de la ligne)
@@ -1172,22 +1173,35 @@ function lireEtiquette(txt){
   // positions des mots-clés
   const pos = [];
   KEYS.forEach(([k,re]) => { if(k==="suc" && /dont\s+sucres?/.test(t)) re = /dont\s+sucres?/;
-    const g = new RegExp(re.source,"g"); let m, prem = null;
+    const g = new RegExp(re.source,"g"); let m, prem = null, best = -1;
     while((m = g.exec(t))){
       if(k==="lip" && /satur/.test(t.slice(m.index).split("\n")[0])) continue;
       const c = {k, i:m.index, end:m.index+m[0].length};
-      if(!prem) prem = c;
-      // on préfère le mot suivi d'un chiffre (vraie ligne du tableau) plutôt qu'un mot perdu dans le texte
-      if(/^[\s.:…]*[<≈~]?\s*\d/.test(t.slice(c.end).split("\n")[0])){ prem = c; break; }
+      // on préfère une vraie ligne du tableau (mot en début de ligne, chiffre juste après)
+      // plutôt qu'un mot perdu dans un texte (ex. « sel » dans les ingrédients)
+      const apres = t.slice(c.end).split("\n");
+      const sc = (/^[\s.:…·-]*[<≈~]?\s*\d/.test(apres[0]) ? 3 : 0)
+               + (/(^|\n)\s*(dont\s+)?$/.test(t.slice(Math.max(0,c.i-8), c.i)) ? 2 : 0)
+               + (!/\S/.test(apres[0]) && /^\s*[<≈~]?\s*\d/.test(apres[1]||"") ? 1 : 0);
+      if(sc > best){ best = sc; prem = c; }
     }
     if(prem) pos.push(prem); });
   pos.sort((a,b)=>a.i-b.i);
   const nums = s => [...s.replace(/\d+(?:\.\d+)?\s*k\s*j/g," ").replace(/\d+(?:\.\d+)?\s*k\s*c\s*a\s*l/g," ").replace(/\d+\s*%/g," ").matchAll(/(\d+(?:\.\d+)?)\s*(m?g)?/g)]
      .map(m => ({v:+m[1], g:!!m[2], raw:m[0]}));
   let trouve = 0;
-  pos.forEach((p,i) => {
-    let fin = i+1<pos.length ? pos[i+1].i : t.indexOf("\n", p.end); if(fin<0) fin = t.length;
-    const n = nums(t.slice(p.end, fin));
+  const seg = pos.map((p,i) => {
+    let fin;
+    if(i+1<pos.length) fin = pos[i+1].i;
+    else { // dernier mot-clé : sa ligne, ou la suivante si le chiffre est passé à la ligne
+      const l1 = t.indexOf("\n", p.end); fin = l1<0 ? t.length : l1;
+      if(!nums(t.slice(p.end, fin)).length && l1>=0){ const l2 = t.indexOf("\n", l1+1); fin = l2<0 ? t.length : l2; }
+    }
+    return nums(t.slice(p.end, fin));
+  });
+  // ligne décalée : un libellé sans chiffre suivi d'un libellé avec 2 chiffres → le 1er chiffre revient au précédent
+  seg.forEach((n,i) => { if(!n.length && seg[i+1] && seg[i+1].length===2 && !seg.some((x,j)=>j!==i+1 && x.length>=2)) seg[i] = [seg[i+1].shift()]; });
+  pos.forEach((p,i) => { const n = seg[i];
     if(n.length){ res[p.k] = n[0].v; if(n[1]) res[p.k+"P"] = n[1].v; trouve++; }
   });
   // mise en page en colonnes, ou colonne de chiffres seule (ordre légal européen)
@@ -1656,7 +1670,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 51</p>
+    <p class="muted">Version 52</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
