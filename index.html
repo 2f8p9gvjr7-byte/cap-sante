@@ -79,6 +79,8 @@ th:first-child,td:first-child{text-align:left}
 .tip{font-size:14px;background:var(--teal-l);border-radius:10px;padding:10px;margin-top:8px}
 .meal h2{display:flex;justify-content:space-between;align-items:center}
 .meal h2 small{font-size:14px;color:var(--muted);font-weight:500}
+.meal .item{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transition:transform .15s}
+.meal .item.lift{position:relative;z-index:5;transition:none;background:var(--card2);box-shadow:0 8px 24px rgba(0,0,0,.5);border-radius:10px}
 .item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left;font:inherit;color:inherit}
 .item small{display:block;color:var(--muted);font-size:13px}
 .item .k{font-weight:600;white-space:nowrap}
@@ -889,14 +891,51 @@ function mealHTML(x, m){
 function bindMeal(root){
   root.querySelectorAll("[data-addm]").forEach(b => b.onclick = () => openSearch(b.dataset.addm));
   root.querySelectorAll("[data-copym]").forEach(b => b.onclick = () => { const m = b.dataset.copym, lm = lastMeal(m); if(lm){ editJ(x => { x.j[m] = JSON.parse(JSON.stringify(lm.items)); }); render(); openMeal(m); } });
-  root.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { const [m,i] = b.dataset.edit.split(":"); const it = day(cur).j[m][+i]; openQty(m, it.f, it.g, +i); });
+  root.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { if(dragJustEnded) return; const [m,i] = b.dataset.edit.split(":"); const it = day(cur).j[m][+i]; openQty(m, it.f, it.g, +i); });
+  dragSort(root);
+}
+/* Appui long sur un aliment puis glisser : change l’ordre du repas */
+let dragJustEnded = false;
+function dragSort(root){
+  const items = [...root.querySelectorAll("[data-edit]")];
+  items.forEach((el, from) => {
+    let timer = null, drag = false, y0 = 0, x0 = 0, to = from, h = 0;
+    const cancel = () => { clearTimeout(timer); timer = null; };
+    el.addEventListener("touchstart", e => {
+      const t = e.touches[0]; y0 = t.clientY; x0 = t.clientX;
+      timer = setTimeout(() => {
+        drag = true; to = from; h = el.getBoundingClientRect().height;
+        el.classList.add("lift"); if(navigator.vibrate) navigator.vibrate(15);
+      }, 350);
+    }, {passive:true});
+    el.addEventListener("touchmove", e => {
+      const t = e.touches[0], dy = t.clientY - y0;
+      if(!drag){ if(Math.abs(dy) > 8 || Math.abs(t.clientX - x0) > 8) cancel(); return; }
+      e.preventDefault();
+      el.style.transform = `translateY(${dy}px)`;
+      to = Math.max(0, Math.min(items.length-1, from + Math.round(dy / h)));
+      items.forEach((o, i) => { if(o===el) return;
+        const shift = (from < to && i > from && i <= to) ? -h : (from > to && i < from && i >= to) ? h : 0;
+        o.style.transform = shift ? `translateY(${shift}px)` : ""; });
+    }, {passive:false});
+    const end = () => {
+      cancel();
+      if(!drag) return;
+      drag = false; dragJustEnded = true; setTimeout(() => dragJustEnded = false, 400);
+      const m = el.dataset.edit.split(":")[0];
+      if(to !== from) editJ(x => { const a = x.j[m]; const [it] = a.splice(from, 1); a.splice(to, 0, it); });
+      render(); openMeal(m);
+    };
+    el.addEventListener("touchend", end); el.addEventListener("touchcancel", end);
+    el.addEventListener("contextmenu", e => e.preventDefault());
+  });
 }
 function openMeal(m){
   const x = day(cur), b = BULLES[m], mt = totals(x, m), n = (x.j[m]||[]).length;
   document.body.style.overflow = "hidden";
   ov.innerHTML = `<div class="top"><button id="ovx">‹ Saisie</button><b style="flex:1;text-align:center">${MEALS.find(z=>z[0]===m)[1]}</b><span style="width:60px;text-align:right" class="muted">${n?Math.round(mt.kcal)+" kcal":""}</span></div>
     <div class="body"><div class="card meal" style="margin-top:12px">${mealHTML(x, m)}</div>
-    <div class="tip">🛡️ <b>Ajoutez les aliments dans l’ordre où vous les mangez.</b> Les légumes puis les protéines mangés <b>avant</b> le sucré ralentissent l’arrivée du sucre dans le sang. Touchez un aliment pour changer la quantité, l’ordre ou le supprimer.</div></div>`;
+    <div class="tip">🛡️ <b>Ajoutez les aliments dans l’ordre où vous les mangez.</b> Les légumes puis les protéines mangés <b>avant</b> le sucré ralentissent l’arrivée du sucre dans le sang. Pour changer l’ordre, <b>appuyez longuement</b> sur un aliment puis faites-le glisser. Touchez-le simplement pour changer la quantité, le remplacer ou le supprimer.</div></div>`;
   ov.classList.add("on");
   document.getElementById("ovx").onclick = () => { closeOv(); render(); };
   bindMeal(ov);
@@ -1583,7 +1622,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 47</p>
+    <p class="muted">Version 48</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };

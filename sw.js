@@ -1,4 +1,4 @@
-const CACHE = "cap-sante-v47";
+const CACHE = "cap-sante-v48";
 const ASSETS = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon-512.png", "/zxing.min.js"];
 
 self.addEventListener("install", e => {
