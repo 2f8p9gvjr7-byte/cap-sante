@@ -1153,7 +1153,10 @@ function openScan(meal){
 function lireEtiquette(txt){
   let t = (" "+txt+" ").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")
     .replace(/[|\[\]{}]/g," ").replace(/(\d)\s*,\s*(\d)/g,"$1.$2").replace(/[ \t]+/g," ")
-    .replace(/(^|[\s<])o\s?g(?=[\s%]|$)/gm, "$1 0 g");
+    .replace(/(^|[\s<])o\s?g(?=[\s%]|$)/gm, "$1 0 g")
+    // « g » lu comme un « 9 » : « 11 9 » → 11 g, « 09 » seul sur sa ligne → 0 g
+    .replace(/^(\s*[a-z][^\d\n]*)?(\d+(?:\.\d+)?) 9[ \t]*$/gm, (m,a,v) => (a||"")+v+" g")
+    .replace(/^\s*0 ?9\s*$/gm, "0 g");
   const res = {};
   // retirer la liste des ingrédients (« sucre », « sel », « matière grasse »… y apparaissent aussi)
   // (si le tableau suit la liste, on l'enlève jusqu'au tableau ; sinon seulement jusqu'à la fin de la ligne)
@@ -1200,7 +1203,8 @@ function lireEtiquette(txt){
     return nums(t.slice(p.end, fin));
   });
   // ligne décalée : un libellé sans chiffre suivi d'un libellé avec 2 chiffres → le 1er chiffre revient au précédent
-  seg.forEach((n,i) => { if(!n.length && seg[i+1] && seg[i+1].length===2 && !seg.some((x,j)=>j!==i+1 && x.length>=2)) seg[i] = [seg[i+1].shift()]; });
+  const doubles = seg.filter(x => x.length>=2).length;
+  seg.forEach((n,i) => { if(!n.length && seg[i+1] && seg[i+1].length===2 && doubles<=1) seg[i] = [seg[i+1].shift()]; });
   pos.forEach((p,i) => { const n = seg[i];
     if(n.length){ res[p.k] = n[0].v; if(n[1]) res[p.k+"P"] = n[1].v; trouve++; }
   });
@@ -1670,7 +1674,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 52</p>
+    <p class="muted">Version 53</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
