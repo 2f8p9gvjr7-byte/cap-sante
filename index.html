@@ -330,6 +330,7 @@ const FOODS_RAW = [
  ["confiture","Confiture","Sucré",240,0.4,58,55,1,0.1,0,0,[["1 c. à soupe",20]],{ig:1}],
  ["miel","Miel","Sucré",320,0.4,80,80,0,0,0,0,[["1 c. à café",10]],{ig:1}],
  ["choc_n","Chocolat noir (70 à 85 %)","Sucré",580,9,30,24,12,44,26,0,[["1 carré",5],["2 carrés",10],["4 carrés",20]],{}],
+ ["choc_lindt85","Chocolat noir 85 % Lindt Excellence","Sucré",603,8.9,19,14,12,55,33,0.08,[["1 carreau",10],["2 carreaux",20],["3 carreaux",30]],{}],
  ["choc_l","Chocolat au lait","Sucré",550,7,55,52,2,32,20,0.25,[["1 carré",5],["2 carrés",10],["4 carrés",20]],{}],
  ["croissant","Croissant","Sucré",410,8,45,8,2.5,21,13,1,[["1 croissant",60]],{ig:1}],
  ["painchoc","Pain au chocolat","Sucré",420,8,48,12,3,21,13,0.9,[["1 pain au chocolat",70]],{ig:1}],
@@ -1622,7 +1623,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 48</p>
+    <p class="muted">Version 49</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
