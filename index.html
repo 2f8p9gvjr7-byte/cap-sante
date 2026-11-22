@@ -1154,6 +1154,10 @@ function lireEtiquette(txt){
   let t = (" "+txt+" ").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")
     .replace(/[|\[\]{}]/g," ").replace(/(\d)\s*,\s*(\d)/g,"$1.$2").replace(/[ \t]+/g," ");
   const res = {};
+  // retirer la liste des ingrédients (« sucre », « sel », « matière grasse »… y apparaissent aussi)
+  // (si le tableau suit la liste, on l'enlève jusqu'au tableau ; sinon seulement jusqu'à la fin de la ligne)
+  t = t.replace(/ingredients?\b[\s\S]*?(?=energie|valeurs? nutritionnelles|informations? nutritionnelles|declaration nutritionnelle|\bkcal|\bkj)/g, " ")
+       .replace(/ingredients?\b[^\n]*/g, " ");
   // poids de la portion
   const mp = t.match(/portion[^0-9\n]{0,20}(\d{2,4})\s*g/) || t.match(/(\d{2,4})\s*g\s*\)?\s*\n?\s*(?:=|par)?\s*portion/);
   if(mp) res.pg = +mp[1];
@@ -1167,10 +1171,16 @@ function lireEtiquette(txt){
                 ["gluc",/(glucides|carbohydrate)/],["fib",/(fibres?)/],["prot",/(proteines?|protein)/],["sel",/(\bsel\b|\bsalt\b)/]];
   // positions des mots-clés
   const pos = [];
-  KEYS.forEach(([k,re]) => { const g = new RegExp(re.source,"g"); let m; while((m = g.exec(t))){
+  KEYS.forEach(([k,re]) => { if(k==="suc" && /dont\s+sucres?/.test(t)) re = /dont\s+sucres?/;
+    const g = new RegExp(re.source,"g"); let m, prem = null;
+    while((m = g.exec(t))){
       if(k==="lip" && /satur/.test(t.slice(m.index).split("\n")[0])) continue;
-      if(k==="suc" && /^sucres?/.test(m[0]) && pos.some(p=>p.k==="suc")) continue;
-      pos.push({k, i:m.index, end:m.index+m[0].length}); break; } });
+      const c = {k, i:m.index, end:m.index+m[0].length};
+      if(!prem) prem = c;
+      // on préfère le mot suivi d'un chiffre (vraie ligne du tableau) plutôt qu'un mot perdu dans le texte
+      if(/^[\s.:…]*[<≈~]?\s*\d/.test(t.slice(c.end).split("\n")[0])){ prem = c; break; }
+    }
+    if(prem) pos.push(prem); });
   pos.sort((a,b)=>a.i-b.i);
   const nums = s => [...s.replace(/\d+(?:\.\d+)?\s*k\s*j/g," ").replace(/\d+(?:\.\d+)?\s*k\s*c\s*a\s*l/g," ").replace(/\d+\s*%/g," ").matchAll(/(\d+(?:\.\d+)?)\s*(m?g)?/g)]
      .map(m => ({v:+m[1], g:!!m[2], raw:m[0]}));
@@ -1221,14 +1231,18 @@ function openLabel(meal, d){
     ${d.source?`<p class="muted" style="margin-top:0">Valeurs trouvées dans ${d.source}${d.code?" (code "+esc(d.code)+")":""}.</p>`:`<p class="muted" style="margin-top:0">À faire <b>une seule fois</b> par produit : il sera ensuite dans <b>Mes produits</b>.</p>`}
     ${d.source?"":`<div style="background:var(--teal-l);border:1px solid var(--teal);border-radius:14px;padding:12px;margin-bottom:12px">
       <b style="color:var(--teal)">📋 Lire l’étiquette avec l’iPhone</b>
-      <ol style="margin:6px 0 8px;padding-left:20px;font-size:15px;line-height:1.5">
-        <li>Touchez le cadre ci-dessous, puis <b>touchez-le une 2ᵉ fois</b>.</li>
-        <li>Choisissez <b>« Scanner le texte »</b> (petite icône de document avec un cadre).</li>
-        <li>Visez <b>la colonne de chiffres « Pour 100 g »</b>, puis touchez <b>« Insérer »</b>.</li>
+      <p style="margin:6px 0 2px;font-size:15px"><b>Le plus simple : à partir d’une photo</b> (tout le tableau d’un coup)</p>
+      <ol style="margin:0 0 8px;padding-left:20px;font-size:15px;line-height:1.5">
+        <li>Prenez le tableau en <b>photo</b> avec l’appareil photo habituel.</li>
+        <li>Dans <b>Photos</b>, ouvrez la photo et <b>appuyez longuement sur un chiffre</b> du tableau, puis <b>« Tout sélectionner »</b> et <b>« Copier »</b>.</li>
+        <li>Revenez ici et touchez <b>« 📋 Coller »</b>.</li>
       </ol>
-      <textarea id="lbTxt" rows="3" placeholder="Touchez ici…" style="width:100%;padding:10px;font-size:16px;border:1px solid var(--line);border-radius:10px;resize:vertical"></textarea>
+      <button class="btn" id="lbPaste" style="margin:0 0 8px">📋 Coller</button>
+      <textarea id="lbTxt" rows="3" placeholder="Le texte de l’étiquette s’affiche ici…" style="width:100%;padding:10px;font-size:16px;border:1px solid var(--line);border-radius:10px;resize:vertical"></textarea>
       <p id="lbLu" style="margin:6px 0 0;font-weight:600"></p>
-      <p class="muted" style="margin:4px 0 0;font-size:13px">Les chiffres seuls suffisent : sur toutes les étiquettes européennes, l’ordre est le même (énergie, matières grasses, saturés, glucides, sucres, fibres, protéines, sel).</p>
+      <details style="margin-top:6px"><summary class="muted" style="cursor:pointer;font-size:14px">Autre façon : scanner en direct</summary>
+        <p class="muted" style="margin:4px 0 0;font-size:14px">Touchez le cadre deux fois, puis « Scanner le texte ». Si toute la colonne ne rentre pas, scannez <b>d’abord le haut puis le bas</b> : les deux morceaux s’ajoutent. Les chiffres seuls suffisent, l’ordre des étiquettes européennes est toujours le même.</p>
+      </details>
     </div>`}
     <label class="f" style="display:block">Nom du produit<input id="lbN" type="text" value="${esc(d.n||"")}" placeholder="ex. Salade repas en kit" style="display:block;width:100%;margin-top:6px;text-align:left"></label>
     <h3>Je recopie la colonne</h3>
@@ -1236,7 +1250,7 @@ function openLabel(meal, d){
     <label class="f" id="lbPgRow"><span id="lbPgLbl">Poids de la portion</span><span style="display:flex;align-items:center;gap:6px"><input id="lbPg" type="text" inputmode="numeric" value="${d.pg||""}" placeholder="ex. 320" style="width:96px"> <span class="muted" style="width:30px">g</span></span></label>
     <h3>Les 4 chiffres utiles</h3>
     ${champ("kcal","Énergie","kcal",1)}${champ("ags","dont acides gras saturés","g",1)}${champ("suc","dont sucres","g",1)}${champ("sel","Sel","g",1)}
-    <details style="margin-top:8px"><summary class="muted" style="cursor:pointer;padding:6px 0">Plus de détails (facultatif)</summary>
+    <details id="lbMore" style="margin-top:8px"><summary class="muted" style="cursor:pointer;padding:6px 0">Plus de détails (facultatif)</summary>
       ${champ("lip","Matières grasses")}${champ("gluc","Glucides")}${champ("fib","Fibres")}${champ("prot","Protéines")}
       ${coche("lib","Contient du sucre ajouté","sucre, sirop, miel, cookie, biscuit…")}
       ${coche("o3","Poisson gras","sardine, maquereau, saumon, hareng…")}
@@ -1252,6 +1266,13 @@ function openLabel(meal, d){
   setMode(mode);
   const touche = {}; ov.querySelectorAll("[data-lbc]").forEach(c => c.onchange = () => touche[c.dataset.lbc] = true);
   const txt = document.getElementById("lbTxt");
+  const pb = document.getElementById("lbPaste");
+  if(pb) pb.onclick = async () => {
+    try { const c = await navigator.clipboard.readText();
+      if(!c || !c.trim()){ alert("Rien à coller : copiez d’abord le texte de la photo."); return; }
+      txt.value = c; txt.oninput();
+    } catch(e){ txt.focus(); alert("Appuyez longuement dans le cadre, puis touchez « Coller »."); }
+  };
   if(txt) txt.oninput = () => {
     const r = lireEtiquette(txt.value), lu = document.getElementById("lbLu");
     const cles = ["kcal","ags","suc","sel","lip","gluc","fib","prot"].filter(k => r[k]!=null);
@@ -1259,7 +1280,7 @@ function openLabel(meal, d){
     setMode("100");
     cles.forEach(k => { const i = ov.querySelector(`[data-lb="${k}"]`); if(i) i.value = String(r[k]).replace(".",","); });
     if(r.pg) document.getElementById("lbPg").value = r.pg;
-    if(["lip","gluc","fib","prot"].some(k => r[k]!=null)) ov.querySelector("details").open = true;
+    if(["lip","gluc","fib","prot"].some(k => r[k]!=null)) document.getElementById("lbMore").open = true;
     const manque = ["kcal","ags","suc","sel"].filter(k => r[k]==null);
     let alerte = "";
     if(r.kcal && r.lip!=null && r.gluc!=null && r.prot!=null){ const calc = 9*r.lip + 4*r.gluc + 4*r.prot + 2*(r.fib||0); if(Math.abs(calc - r.kcal) > 0.25*r.kcal) alerte = " · ⚠️ chiffres incohérents, vérifiez"; }
@@ -1635,7 +1656,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 50</p>
+    <p class="muted">Version 51</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
