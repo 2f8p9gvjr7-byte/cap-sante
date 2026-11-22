@@ -973,10 +973,11 @@ function rRepas(){
 const ov = document.getElementById("ov");
 const norm = s => s.toLowerCase().replace(/œ/g,"oe").replace(/æ/g,"ae").replace(/[’']/g," ").normalize("NFD").replace(/[̀-ͯ]/g,"");
 function closeOv(){ ovRefresh = null; ov.classList.remove("on"); ov.innerHTML = ""; document.body.style.overflow = ""; }
-function openSearch(meal){
+function openSearch(meal, rep){
+  // rep = {idx, g, n} : remplacer l’aliment n° idx du repas, à la même place
   document.body.style.overflow = "hidden";
-  ov.innerHTML = `<div class="top"><input id="q" type="search" placeholder="Chercher un aliment…" autocomplete="off"><button id="ovx">Annuler</button></div>
-    <div style="display:flex;gap:8px;padding:10px 12px 0;background:var(--bg)"><button class="btn sec" id="goScan" style="margin:0;padding:10px 6px;font-size:15px">📷 Scanner un code-barres</button><button class="btn sec" id="goLabel" style="margin:0;padding:10px 6px;font-size:15px">📋 Lire une étiquette</button></div>
+  ov.innerHTML = `<div class="top"><input id="q" type="search" placeholder="${rep?"Remplacer par…":"Chercher un aliment…"}" autocomplete="off"><button id="ovx">Annuler</button></div>
+    ${rep?`<p style="margin:0;padding:10px 14px 0;background:var(--bg)">🔄 Remplacer <b>${esc(rep.n)}</b> par :</p>`:""}<div style="display:${rep?"none":"flex"};gap:8px;padding:10px 12px 0;background:var(--bg)"><button class="btn sec" id="goScan" style="margin:0;padding:10px 6px;font-size:15px">📷 Scanner un code-barres</button><button class="btn sec" id="goLabel" style="margin:0;padding:10px 6px;font-size:15px">📋 Lire une étiquette</button></div>
     <div class="body" id="res"></div>`;
   document.getElementById("goScan").onclick = () => openScan(meal);
   document.getElementById("goLabel").onclick = () => openLabel(meal, {});
@@ -1000,7 +1001,7 @@ function openSearch(meal){
       html = hits.length ? hits.map(line).join("") : `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou ajoutez le produit avec <b>📷 Scanner un code-barres</b> ou <b>📋 Lire une étiquette</b>.</p>`;
     }
     res.innerHTML = html;
-    res.querySelectorAll("[data-f]").forEach(b => b.onclick = () => openQty(meal, b.dataset.f, FOODS[b.dataset.f].por[0][1], -1));
+    res.querySelectorAll("[data-f]").forEach(b => b.onclick = () => rep ? openQty(meal, b.dataset.f, rep.g, rep.idx) : openQty(meal, b.dataset.f, FOODS[b.dataset.f].por[0][1], -1));
   };
   q.oninput = show; show();
   document.getElementById("ovx").onclick = () => openMeal(meal);
@@ -1265,6 +1266,7 @@ function openQty(meal, fid, grams, idx){
         </div>
         <button class="btn" id="ok">${idx>=0?"Enregistrer":"Ajouter"}</button>
         ${idx>=0?`<div style="display:flex;gap:8px;margin-top:10px"><button class="btn sec" id="mvUp" style="margin:0" ${idx===0?"disabled":""}>↑ Mangé plus tôt</button><button class="btn sec" id="mvDn" style="margin:0" ${idx>=(day(cur).j[meal]||[]).length-1?"disabled":""}>↓ Mangé plus tard</button></div>
+        <button class="btn sec" id="repl" style="margin-top:10px">🔄 Remplacer par un autre aliment</button>
         <button class="btn danger" id="del">Supprimer</button>`:""}
       </div>
     </div>`;
@@ -1284,6 +1286,7 @@ function openQty(meal, fid, grams, idx){
     };
     const mv = d => { editJ(x => { const a = x.j[meal]; const j = idx+d; if(j<0||j>=a.length) return; [a[idx],a[j]] = [a[j],a[idx]]; }); render(); openMeal(meal); };
     if(idx>=0){ document.getElementById("mvUp").onclick = () => mv(-1); document.getElementById("mvDn").onclick = () => mv(1); }
+    if(idx>=0) document.getElementById("repl").onclick = () => openSearch(meal, {idx, g, n:f.n});
     if(idx>=0) document.getElementById("del").onclick = () => { editJ(x => { x.j[meal].splice(idx,1); }); render(); openMeal(meal); };
   };
   draw();
@@ -1580,7 +1583,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 46</p>
+    <p class="muted">Version 47</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
