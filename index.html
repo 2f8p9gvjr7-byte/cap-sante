@@ -27,6 +27,13 @@ nav{position:fixed;bottom:0;left:0;right:0;z-index:5;display:flex;background:#0a
 nav button{flex:1;border:0;background:none;padding:9px 2px 8px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
 nav button span{font-size:22px;line-height:1}
 nav button.on{color:var(--teal);font-weight:600}
+#menuBtn{border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--ink);border-radius:999px;padding:8px 14px;font:inherit;font-size:15px;font-weight:600}
+#menuBtn.on{background:var(--teal);color:#0d1730;border-color:var(--teal)}
+#menu{display:none;position:absolute;right:12px;top:calc(100% - 4px);background:#16244a;border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.5);overflow:hidden;min-width:230px}
+#menu.open{display:block}
+#menu button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ink);font:inherit;font-size:17px;padding:14px 16px;border-bottom:1px solid var(--line)}
+#menu button:last-child{border-bottom:0}
+#menu button.on{color:var(--teal);font-weight:700}
 .card{background:var(--card);border-radius:18px;padding:16px;margin-bottom:12px;border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .card h2{margin:0 0 10px;font-size:18px}
 .card h3{margin:14px 0 6px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
@@ -122,7 +129,9 @@ input::placeholder{color:#6f7da0}
 </style>
 </head>
 <body>
-<header><h1>Cap Santé</h1><p id="sub">Glycémie · Cholestérol · Reins</p></header>
+<header><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><h1>Cap Santé</h1><p id="sub">Glycémie · Cholestérol · Reins</p></div>
+  <button id="menuBtn" aria-haspopup="true" aria-expanded="false">☰ Plus</button></div>
+  <div id="menu" role="menu"><button data-t="analyses" role="menuitem">🩸 Analyses de sang</button><button data-t="reglages" role="menuitem">⚙️ Réglages et sauvegarde</button></div></header>
 <main id="app"></main>
 <div id="ov"></div>
 <div id="upd">Nouvelle version disponible <button id="updBtn">Mettre à jour</button></div>
@@ -130,8 +139,6 @@ input::placeholder{color:#6f7da0}
   <button data-t="jour" class="on"><span>📊</span>Tableau de bord</button>
   <button data-t="repas"><span>✍️</span>Saisie</button>
   <button data-t="bilan"><span>📈</span>Tendance</button>
-  <button data-t="analyses"><span>🩸</span>Analyses</button>
-  <button data-t="reglages"><span>⚙️</span>Réglages</button>
 </nav>
 <input type="file" id="fileIn" accept="application/json,.json" class="hidden">
 <script>
@@ -586,10 +593,15 @@ let tab = "jour", cur = today();
 let WD = {km:"", min:"", al:"n"};
 let quickOpen = false;   // liste rapide affichée même quand le journal des repas est rempli   // marche en cours de saisie
 const app = document.getElementById("app");
-document.querySelectorAll("nav button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); window.scrollTo(0,0); });
+document.querySelectorAll("nav button, #menu button").forEach(b => b.onclick = () => { tab = b.dataset.t; menuOpen(false); render(); window.scrollTo(0,0); });
+const menuEl = document.getElementById("menu"), menuBtn = document.getElementById("menuBtn");
+function menuOpen(o){ menuEl.classList.toggle("open", o); menuBtn.setAttribute("aria-expanded", o); }
+menuBtn.onclick = e => { e.stopPropagation(); menuOpen(!menuEl.classList.contains("open")); };
+document.addEventListener("click", e => { if(!menuEl.contains(e.target)) menuOpen(false); });
 
 function render(){
-  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.t===tab));
+  document.querySelectorAll("nav button, #menu button").forEach(b => b.classList.toggle("on", b.dataset.t===tab));
+  menuBtn.classList.toggle("on", tab==="analyses" || tab==="reglages");
   ({jour:rJour, repas:rRepas, bilan:rBilan, analyses:rAnalyses, reglages:rReglages})[tab]();
 }
 
@@ -1623,7 +1635,7 @@ function rReglages(){
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted">Version 49</p>
+    <p class="muted">Version 50</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
