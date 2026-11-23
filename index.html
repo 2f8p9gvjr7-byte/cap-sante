@@ -1494,11 +1494,15 @@ function rBilan(){
 
   ${etape("②","L’évolution jour après jour")}
   <div class="card">
-    <div class="chips" style="margin-bottom:10px">${Object.keys(AXES).map(k=>`<button class="chip ${chartAxe===k?"on":""}" data-axe="${k}">${AXES[k].nom}</button>`).join("")}</div>
+    <div class="chips" style="margin-bottom:8px">${Object.keys(AXES).map(k=>`<button class="chip ${chartAxe===k?"on":""}" data-axe="${k}">${AXES[k].nom}</button>`).join("")}</div>
+    <div class="chips" style="margin-bottom:10px">${[[30,"1 mois"],[91,"3 mois"],[182,"6 mois"],[364,"1 an"]].map(([d,l])=>`<button class="chip ${chartPer===d?"on":""}" data-per="${d}" style="font-size:14px;padding:6px 12px">${l}</button>`).join("")}</div>
     ${courbe(chartAxe)}
   </div>
 
-  ${etape("③","Ma dernière prise de sang")}
+  ${etape("③","Mois par mois")}
+  <div class="card">${moisParMois()}</div>
+
+  ${etape("④","Ma dernière prise de sang")}
   <div class="card">
     ${LABS_TB.length ? `<div style="display:grid;grid-template-columns:repeat(${Math.min(3,LABS_TB.length)},1fr);gap:8px">${LABS_TB.map(z => `<div style="background:var(--bg);border-radius:12px;padding:10px 4px;text-align:center">
         <small class="muted">${z.l}</small><b style="display:block;font-size:26px;margin:2px 0">${fmt(z.r.v,z.dec)}</b>
@@ -1507,7 +1511,10 @@ function rBilan(){
       : `<p class="muted" style="margin:0">Ajoutez vos résultats dans l’onglet <b>🩸 Analyses</b>.</p>`}
   </div>
 
-  ${etape("④","Le détail de la semaine")}
+  ${etape("⑤","Mes efforts et mes prises de sang")}
+  <div class="card">${entreAnalyses()}</div>
+
+  ${etape("⑥","Le détail de la semaine")}
   <div class="card">
     ${resume || ""}
     ${Object.keys(agg).length ? `<h3>Tout ce qui a compté</h3>` + factorList(Object.values(agg).map(f => { const n = a?a.n:1, e = {}; for(const k in f.e) e[k] = f.e[k]/n;
@@ -1517,12 +1524,65 @@ function rBilan(){
   <div class="tip">📏 <b>Comment lire le score :</b> 100 = journée idéale, 50 = journée moyenne, <b>70 et plus</b> = vos habitudes vont dans le bon sens. Ce score mesure vos <b>habitudes</b>, pas votre sang : seule la prise de sang dit si la glycémie ou le cholestérol ont vraiment bougé.</div>`;
   app.querySelectorAll("[data-detailw]").forEach(b => b.onclick = () => openDetail(b.dataset.detailw, true));
   app.querySelectorAll("[data-axe]").forEach(b => b.onclick = () => { chartAxe = b.dataset.axe; const y = window.scrollY; render(); window.scrollTo(0,y); });
+  app.querySelectorAll("[data-per]").forEach(b => b.onclick = () => { chartPer = +b.dataset.per; const y = window.scrollY; render(); window.scrollTo(0,y); });
   app.querySelectorAll("[data-pt]").forEach(g => g.onclick = () => {
-    const [s, v] = g.dataset.pt.split("|"), n = niveau(+v);
+    const [s, v, sem] = g.dataset.pt.split("|"), n = niveau(+v);
     app.querySelectorAll("[data-pt] circle").forEach(c => c.setAttribute("r", 5));
     g.querySelector("circle").setAttribute("r", 8);
-    document.getElementById("ptInfo").innerHTML = `${esc(parse(s).toLocaleDateString("fr-FR",{weekday:"long", day:"numeric", month:"long"}))} : <b style="color:${n.c}">${v}</b> · ${n.t}`;
+    document.getElementById("ptInfo").innerHTML = `${ptLabel(s, sem==="1")} : <b style="color:${n.c}">${v}</b> · ${n.t}`;
   });
+}
+
+/* ---------- Mois par mois ---------- */
+function moisParMois(){
+  const t = today(), rows = [];
+  for(let i=0;i<12;i++){
+    const d0 = parse(t); d0.setDate(1); d0.setMonth(d0.getMonth()-i);
+    const du = iso(d0), fin = new Date(d0.getFullYear(), d0.getMonth()+1, 0), au = iso(fin) > t ? t : iso(fin);
+    const m = moyenne(du, au); if(m) rows.push({du, m});
+  }
+  if(!rows.length) return `<p class="muted" style="margin:0">Pas encore de données.</p>`;
+  rows.reverse();
+  const cell = (v, prev) => { const n = niveau(v), d = prev==null ? "" : v-prev>3 ? " ↗" : v-prev<-3 ? " ↘" : " →";
+    return `<td style="text-align:center"><b style="color:${n.c}">${v}</b><span class="muted" style="font-size:13px">${d}</span></td>`; };
+  return `<table style="width:100%;border-collapse:collapse;font-size:15px">
+    <tr class="muted" style="font-size:13px"><td></td>${Object.keys(AXES).map(k=>`<td style="text-align:center">${AXES[k].nom}</td>`).join("")}</tr>
+    ${rows.map((r,i) => { const p = i ? rows[i-1].m : null;
+      return `<tr style="border-top:1px solid var(--line)"><td style="padding:8px 0">${esc(parse(r.du).toLocaleDateString("fr-FR",{month:"long", year:"numeric"}))}<br><small class="muted">${r.m.n} jour${r.m.n>1?"s":""} rempli${r.m.n>1?"s":""}</small></td>
+        ${Object.keys(AXES).map(k => cell(r.m[k], p && p[k])).join("")}</tr>`; }).join("")}
+  </table>
+  <p class="muted" style="margin:8px 0 0;font-size:13px">Moyenne des jours remplis. ↗ ↘ : par rapport au mois d’avant.</p>`;
+}
+/* ---------- Les efforts entre deux prises de sang ---------- */
+function entreAnalyses(){
+  const dates = [...new Set(L.map(e=>e.date))].sort();
+  if(!dates.length) return `<p class="muted" style="margin:0">Ajoutez vos prises de sang dans <b>☰ Plus → Analyses</b> : on verra ici si vos efforts se retrouvent dans les résultats.</p>`;
+  const val = (d, id) => { const e = L.find(x => x.date===d && x[id]!=null && x[id]!==""); return e ? +e[id] : null; };
+  const SUIVI = [["gly","Glycémie",2],["hba1c","HbA1c",1],["ldl","LDL",2],["dfg","DFG",0]];
+  const scores = m => m ? `<div style="display:flex;gap:6px;margin:6px 0">${Object.keys(AXES).map(k=>{ const n = niveau(m[k]);
+      return `<span style="flex:1;text-align:center;background:${n.bg};border-radius:10px;padding:4px 2px"><small class="muted">${AXES[k].nom}</small><b style="display:block;color:${n.c}">${m[k]}</b></span>`; }).join("")}</div>
+      <small class="muted">Moyenne de vos scores sur ${m.n} jour${m.n>1?"s":""} rempli${m.n>1?"s":""}</small>`
+    : `<p class="muted" style="margin:4px 0">Pas de journal tenu sur cette période.</p>`;
+  let html = "";
+  // période en cours : depuis la dernière prise de sang
+  const der = dates[dates.length-1];
+  html += `<div style="border:1px solid var(--teal);border-radius:12px;padding:10px;margin-bottom:10px">
+    <b>Depuis la prise de sang du ${fmtShort(der)}</b>
+    ${scores(moyenne(addDays(der,1), today()))}
+    <p class="muted" style="margin:6px 0 0;font-size:13px">La prochaine prise de sang dira si ces habitudes ont fait bouger les chiffres.</p></div>`;
+  // périodes passées, de la plus récente à la plus ancienne
+  for(let i=dates.length-1;i>=1;i--){
+    const a = dates[i-1], b = dates[i], m = moyenne(addDays(a,1), b);
+    const lignes = SUIVI.map(([id,l,dec]) => { const va = val(a,id), vb = val(b,id); if(va==null || vb==null) return "";
+      const def = LABS.find(x=>x.id===id), mieux = def.bas ? vb<va : vb>va, stable = Math.abs(vb-va)/Math.max(Math.abs(va),0.01) < 0.06;
+      const c = stable ? "var(--muted)" : mieux ? "var(--good)" : "var(--bad)";
+      return `<div style="display:flex;justify-content:space-between"><span>${l}</span><span>${fmt(va,dec)} → <b style="color:${c}">${fmt(vb,dec)}</b> ${stable?"stable":mieux?"✅":"⚠️"}</span></div>`; }).join("");
+    html += `<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">
+      <b>Du ${fmtShort(a)} au ${fmtShort(b)}</b>
+      ${lignes || `<p class="muted" style="margin:4px 0">Pas de résultat comparable entre ces deux prises de sang.</p>`}
+      ${scores(m)}</div>`;
+  }
+  return html;
 }
 
 /* ---------- Carte « Mes objectifs » ---------- */
@@ -1561,9 +1621,16 @@ function objCard(agg, a, b){
 }
 
 /* Courbe arrondie avec un visage par jour */
-let chartAxe = "sucre";
+let chartAxe = "sucre", chartPer = 30;
+/* moyenne des scores sur les jours remplis entre deux dates (incluses) */
+function moyenne(du, au){
+  let n = 0; const sm = {sucre:0, chol:0, reins:0};
+  Object.keys(D).forEach(k => { if(k>=du && k<=au && hasData(D[k])){ const r = score(day(k)); n++; for(const a in sm) sm[a] += r[a]; } });
+  if(!n) return null; for(const a in sm) sm[a] = Math.round(sm[a]/n); sm.n = n; return sm;
+}
 function courbe(axe){
   const t = today();
+  if(chartPer > 30) return courbeSemaines(axe, t);
   const filled = Object.keys(D).filter(k => k<=t && k>addDays(t,-30) && hasData(D[k])).sort();
   if(filled.length<2) return `<p class="muted" style="margin:0">La courbe apparaîtra dès <b>2 jours</b> remplis (${filled.length} pour l’instant).</p>`;
   const N = Math.max(7, Math.min(30, Math.round((parse(t)-parse(filled[0]))/864e5)+1));
@@ -1573,6 +1640,21 @@ function courbe(axe){
   const X = i => P.l + i*(W-P.l-P.r)/(N-1), Y = v => P.t + (100-v)*(H-P.t-P.b)/(100-lo);
   const pts = [];
   for(let i=N-1;i>=0;i--){ const s = addDays(t,-i); if(hasData(D[s])) pts.push({x:X(N-1-i), y:Y(score(day(s))[axe]), v:score(day(s))[axe], s}); }
+  return dessinCourbe(axe, pts, N, X, Y, W, H, P, addDays(t,-(N-1)), t, false);
+}
+/* au-delà d’un mois : un point par semaine (moyenne des jours remplis) */
+function courbeSemaines(axe, t){
+  const NS = Math.round(chartPer/7), W = 340, H = 220, P = {l:12, r:12, t:34, b:30};
+  const sem = [];
+  for(let w=NS-1; w>=0; w--){ const au = addDays(t,-7*w), du = addDays(au,-6), m = moyenne(du, au); if(m) sem.push({i:NS-1-w, du, v:m[axe]}); }
+  if(sem.length<2) return `<p class="muted" style="margin:0">Il faut au moins <b>2 semaines</b> remplies pour cette période (${sem.length} pour l’instant). Revenez à « 1 mois » en attendant.</p>`;
+  const i0 = sem[0].i, N = NS - i0;
+  const lo = Math.max(0, Math.min(40, Math.floor((Math.min(...sem.map(x=>x.v))-10)/10)*10));
+  const X = i => P.l + (i-i0)*(W-P.l-P.r)/Math.max(1,N-1), Y = v => P.t + (100-v)*(H-P.t-P.b)/(100-lo);
+  const pts = sem.map(x => ({x:X(x.i), y:Y(x.v), v:x.v, s:x.du, sem:true}));
+  return dessinCourbe(axe, pts, N, i => X(i+i0), Y, W, H, P, sem[0].du, t, true);
+}
+function dessinCourbe(axe, pts, N, X, Y, W, H, P, debut, t, parSemaine){
   // courbe lissée (Catmull-Rom → Bézier)
   let d = `M${pts[0].x},${pts[0].y}`;
   for(let i=0;i<pts.length-1;i++){
@@ -1594,14 +1676,18 @@ function courbe(axe){
     <line x1="${P.l}" x2="${W-P.r}" y1="${y70}" y2="${y70}" stroke="#a7f3d0" stroke-opacity=".55" stroke-dasharray="4 4"/>
     <path d="${aire}" fill="url(#aire)"/>
     <path d="${d}" fill="none" stroke="#99f6e4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    ${pts.map(p => `<g data-pt="${p.s}|${p.v}" style="cursor:pointer">
+    ${pts.map(p => `<g data-pt="${p.s}|${p.v}|${p.sem?1:0}" style="cursor:pointer">
       <rect x="${p.x-pas/2}" y="0" width="${pas}" height="${H}" fill="transparent"/>
-      <text x="${p.x}" y="${p.y-10}" font-size="${fs}" text-anchor="middle">${visage(p.v)}</text>
-      <circle cx="${p.x}" cy="${p.y}" r="5" fill="#ffffff" stroke="#14b8a6" stroke-width="3"/></g>`).join("")}
-    ${[[0,addDays(t,-(N-1))],[N-1,t]].map(([i,s],j)=>`<text x="${X(i)}" y="${H-10}" font-size="10" fill="#ccfbf1" text-anchor="${j?"end":"start"}">${parse(s).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</text>`).join("")}
+      ${pas>=9 ? `<text x="${p.x}" y="${p.y-10}" font-size="${fs}" text-anchor="middle">${visage(p.v)}</text>` : ""}
+      <circle cx="${p.x}" cy="${p.y}" r="${pas>=9?5:3}" fill="#ffffff" stroke="#14b8a6" stroke-width="${pas>=9?3:2}"/></g>`).join("")}
+    ${[[0,debut],[N-1,t]].map(([i,s],j)=>`<text x="${X(i)}" y="${H-10}" font-size="10" fill="#ccfbf1" text-anchor="${j?"end":"start"}">${parse(s).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:parSemaine?"2-digit":undefined})}</text>`).join("")}
   </svg>`;
-  return svg + `<p id="ptInfo" class="muted" style="margin:8px 0 0">${esc(parse(last.s).toLocaleDateString("fr-FR",{weekday:"long", day:"numeric", month:"long"}))} : <b style="color:${nl.c}">${last.v}</b> · ${nl.t}</p>
-    <p class="muted" style="margin:4px 0 0;font-size:13px">😃 70 et plus · 😐 50 à 69 · 😟 moins de 50 · pointillés : objectif 70. Touchez un jour pour voir sa note.</p>`;
+  return svg + `<p id="ptInfo" class="muted" style="margin:8px 0 0">${ptLabel(last.s, parSemaine)} : <b style="color:${nl.c}">${last.v}</b> · ${nl.t}</p>
+    <p class="muted" style="margin:4px 0 0;font-size:13px">😃 70 et plus · 😐 50 à 69 · 😟 moins de 50 · pointillés : objectif 70. ${parSemaine?"Un point = la moyenne d’une semaine. Touchez un point pour voir sa note.":"Touchez un jour pour voir sa note."}</p>`;
+}
+function ptLabel(s, sem){
+  return sem ? "Semaine du "+esc(parse(s).toLocaleDateString("fr-FR",{day:"numeric", month:"long"}))
+             : esc(parse(s).toLocaleDateString("fr-FR",{weekday:"long", day:"numeric", month:"long"}));
 }
 function chart(){
   const W = 340, H = 170, P = {l:28, r:8, t:8, b:22};
@@ -1706,7 +1792,7 @@ function rReglages(){
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
     <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
-    <p class="muted">Version 56</p>
+    <p class="muted">Version 57</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
