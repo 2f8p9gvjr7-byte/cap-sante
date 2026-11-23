@@ -464,13 +464,14 @@ function registerPerso(){
 registerPerso();
 /* Table Ciqual (Anses) : ~3 300 aliments, chargée seulement quand on cherche.
    Les aliments choisis sont gardés dans S.ciq pour s'afficher sans recharger la table. */
-let CIQ = null, ciqLoad = null;
+let CIQ = null, ciqLoad = null, ciqErr = "";
 function ciqFood(r){ const o = Object.assign({}, r[11]); const lib = o.lib||0; delete o.lib;
   return {id:r[0], n:r[1], c:"Ciqual · "+r[2], kcal:r[3], prot:r[4], gluc:r[5], suc:r[6], fib:r[7], lip:r[8], ags:r[9], sel:r[10], por:[["100 g",100],["50 g",50],["30 g",30]], o, lib}; }
 function registerCiq(){ (S.ciq||[]).forEach(r => { FOODS[r[0]] = ciqFood(r); }); }
 function loadCiq(){
-  if(!ciqLoad) ciqLoad = fetch("aliments.json").then(r => r.json()).then(j => { CIQ = j.foods.map(r => ({r, t:norm(r[1])})); })
-    .catch(() => { ciqLoad = null; });
+  if(!ciqLoad) ciqLoad = fetch("aliments.json", {cache:"no-cache"}).then(r => { if(!r.ok) throw new Error("absent ("+r.status+")"); return r.json(); })
+    .then(j => { CIQ = j.foods.map(r => ({r, t:norm(r[1])})); ciqErr = ""; })
+    .catch(e => { ciqLoad = null; ciqErr = String(e && e.message || e); });
   return ciqLoad;
 }
 registerCiq();
@@ -912,11 +913,12 @@ function lastMeal(m){
 }
 function mealHTML(x, m){
   const items = x.j[m]||[], facs = mealFactors(items);
-  return items.map((it,i) => { const f = FOODS[it.f]; if(!f) return ""; const n = nutr(f,it.g);
+  // bouton d’ajout en haut : il reste visible même quand la liste s’allonge
+  return `<button class="add" style="margin:0 0 6px" data-addm="${m}">+ Ajouter un aliment</button>`
+    + (!items.length && lastMeal(m) ? `<button class="add" style="background:var(--card2);margin:0 0 6px" data-copym="${m}">↺ Reprendre celui ${esc(lastMeal(m).lbl)}</button>` : "")
+    + items.map((it,i) => { const f = FOODS[it.f]; if(!f) return ""; const n = nutr(f,it.g);
       const ral = facs[i]<1 && (n.suc>=2 || (f.o.ig && n.gluc>=5));
-      return `<button class="item" data-edit="${m}:${i}"><span>${esc(f.n)}<small>${Math.round(it.g)} g · sucres ${fmt(n.suc,0)} g · sel ${fmt(n.sel,1)} g${ral?`<br><span style="color:var(--good)">🛡️ sucre ralenti ${facs[i]===ORDRE.plein?"(−30 %)":"(−15 %)"} par ce qui précède</span>`:""}</small></span><span class="k">${Math.round(n.kcal)} kcal</span></button>`; }).join("")
-    + `<button class="add" data-addm="${m}">+ Ajouter un aliment</button>`
-    + (!items.length && lastMeal(m) ? `<button class="add" style="background:var(--card2)" data-copym="${m}">↺ Reprendre celui ${esc(lastMeal(m).lbl)}</button>` : "");
+      return `<button class="item" data-edit="${m}:${i}"><span>${esc(f.n)}<small>${Math.round(it.g)} g · sucres ${fmt(n.suc,0)} g · sel ${fmt(n.sel,1)} g${ral?`<br><span style="color:var(--good)">🛡️ sucre ralenti ${facs[i]===ORDRE.plein?"(−30 %)":"(−15 %)"} par ce qui précède</span>`:""}</small></span><span class="k">${Math.round(n.kcal)} kcal</span></button>`; }).join("");
 }
 function bindMeal(root){
   root.querySelectorAll("[data-addm]").forEach(b => b.onclick = () => openSearch(b.dataset.addm));
@@ -1075,15 +1077,16 @@ function openSearch(meal, rep){
           .sort((a,b) => (a.t.startsWith(words[0])?0:1) - (b.t.startsWith(words[0])?0:1) || a.t.length - b.t.length).slice(0, 40);
         if(ch.length) html += `<div class="cat">Table Ciqual (Anses) · ${ch.length>=40?"40 premiers":ch.length} résultat${ch.length>1?"s":""}</div>` + ch.map(c => line(ciqFood(c.r))).join("");
       } else {
-        html += `<p class="muted">Recherche dans la table Ciqual…</p>`;
-        const v = q.value; loadCiq().then(() => { if(q.value===v && CIQ) show(); });
+        html += ciqErr ? `<p style="color:var(--warn)">⚠️ La table Ciqual n’a pas pu être chargée (fichier aliments.json ${esc(ciqErr)}). Vérifiez qu’il est bien sur GitHub avec les autres fichiers.</p>`
+                       : `<p class="muted">Recherche dans la table Ciqual…</p>`;
+        const v = q.value; if(!ciqErr) loadCiq().then(() => { if(q.value===v) show(); });
       }
       if(CIQ && !html.includes("data-f")) html = `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou ajoutez le produit avec <b>📷 Scanner un code-barres</b> ou <b>📋 Lire une étiquette</b>.</p>`;
     }
     res.innerHTML = html;
     res.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { keepCiq(b.dataset.f); rep ? openQty(meal, b.dataset.f, rep.g, rep.idx) : openQty(meal, b.dataset.f, FOODS[b.dataset.f].por[0][1], -1); });
   };
-  q.oninput = show; show();
+  q.oninput = () => { if(!CIQ) ciqErr = ""; show(); }; show();
   document.getElementById("ovx").onclick = () => openMeal(meal);
   setTimeout(()=>q.focus(), 50);
 }
@@ -1703,7 +1706,7 @@ function rReglages(){
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
     <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
-    <p class="muted">Version 54</p>
+    <p class="muted">Version 56</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };

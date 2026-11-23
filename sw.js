@@ -1,8 +1,9 @@
-const CACHE = "cap-sante-v54";
+const CACHE = "cap-sante-v56";
 const ASSETS = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon-512.png", "/zxing.min.js", "/aliments.json"];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  // fichier par fichier : un fichier manquant ne bloque plus la mise à jour
+  e.waitUntil(caches.open(CACHE).then(c => Promise.all(ASSETS.map(a => c.add(a).catch(() => null)))));
 });
 
 self.addEventListener("activate", e => {
