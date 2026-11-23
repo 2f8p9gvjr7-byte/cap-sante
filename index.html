@@ -256,6 +256,7 @@ const FOODS_RAW = [
  ["haricots","Haricots blancs / rouges cuits","Légumineuses",110,8,13,0.5,8,0.5,0.1,0.01,[["1 portion",150]],{}],
  // Féculents
  ["baguette","Pain blanc (baguette)","Pain et féculents",270,9,56,3,2.7,1.2,0.3,1.3,[["1 morceau (5 cm)",30],["¼ de baguette",60]],{ig:1}],
+ ["kesra","Kesra (galette de semoule, matlouh)","Pain et féculents",300,9,53,1.5,3,5.5,0.9,1.1,[["1 part (⅛ de galette)",90],["¼ de galette",180]],{ig:1}],
  ["pcomplet","Pain complet / aux céréales","Pain et féculents",240,9,43,3,7,2,0.4,1.1,[["1 tranche",35],["2 tranches",70]],{}],
  ["pmie","Pain de mie","Pain et féculents",270,8,50,5,3,4,0.6,1.1,[["1 tranche",25]],{ig:1}],
  ["biscotte","Biscottes","Pain et féculents",400,11,72,6,4,6,1,1.1,[["2 biscottes",20]],{ig:1}],
@@ -1792,7 +1793,7 @@ function rReglages(){
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
     <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
-    <p class="muted">Version 57</p>
+    <p class="muted">Version 58</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
