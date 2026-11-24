@@ -733,9 +733,17 @@ function rJour(){
   app.innerHTML = `
   ${dateBar()}
   <div class="card">
-    <h2>Score du jour</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between"><h2 style="margin:0">Score du jour</h2>
+      ${filled ? `<button id="legBtn" aria-expanded="false" style="border:1px solid var(--line);background:none;color:var(--muted);border-radius:999px;padding:4px 12px;font:inherit;font-size:14px">ⓘ Couleurs</button>` : ""}</div>
+    <div id="leg" hidden style="background:var(--bg);border-radius:12px;padding:10px 12px;margin:10px 0 0;font-size:15px;line-height:1.6">
+      <div><span style="color:var(--good);font-weight:700">● bien</span> : 70 et plus</div>
+      <div><span style="color:var(--warn);font-weight:700">● moyen</span> : 50 à 69</div>
+      <div><span style="color:var(--bad);font-weight:700">● à améliorer</span> : moins de 50</div>
+      ${cur===today()?`<div><span style="color:#6fb6ff;font-weight:700">● journée en cours</span> : rien de négatif, la marche et les fibres feront monter le score</div>`:""}
+    </div>
+    <div style="height:10px"></div>
     ${filled ? `<div class="scores">${Object.keys(AXES).map(a=>{ const n = enCours(x, a, r[a]) || niveau(r[a]); return `<div class="score" data-detail="${a}" style="background:${n.bg};cursor:pointer">${ring(r[a], n.c)}<small>${AXES[a].nom}<br><span style="color:${n.c};font-weight:600">${n.t}</span></small></div>`; }).join("")}</div>
-    <p class="muted" style="margin:8px 0 0">🟢 70 et plus : bien · 🟠 50 à 69 : moyen · 🔴 moins de 50 : à améliorer${cur===today()?"<br>🔵 journée en cours : rien de négatif, la marche et les fibres feront monter le score":""}<br>👆 <b>Touchez un score</b> pour voir le détail, aliment par aliment.</p>`
+    <p class="muted" style="margin:8px 0 0;font-size:14px">👆 Touchez un score pour voir le détail.</p>`
     : `<p class="muted" style="margin:0">Rien de noté pour ce jour. Remplissez l’onglet <b>✍️ Saisie</b> : repas, activité, eau…</p>
        <button class="btn" id="goSaisie">Aller à la saisie</button>`}
   </div>
@@ -750,6 +758,8 @@ function rJour(){
   <div class="card"><h2>Ce qui a compté aujourd’hui</h2>${factorList(contributions(x))}</div>` : ""}`;
   bindDateBar();
   app.querySelectorAll("[data-detail]").forEach(b => b.onclick = () => openDetail(b.dataset.detail));
+  const lb = document.getElementById("legBtn");
+  if(lb) lb.onclick = () => { const l = document.getElementById("leg"); l.hidden = !l.hidden; lb.setAttribute("aria-expanded", !l.hidden); lb.textContent = l.hidden ? "ⓘ Couleurs" : "✕ Fermer"; };
   app.querySelectorAll("[data-nut]").forEach(b => b.onclick = () => openNutri(b.dataset.nut));
   const gs = document.getElementById("goSaisie"); if(gs) gs.onclick = () => { tab = "repas"; render(); window.scrollTo(0,0); };
 }
@@ -1796,7 +1806,7 @@ function rReglages(){
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
     <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
-    <p class="muted">Version 59</p>
+    <p class="muted">Version 60</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
