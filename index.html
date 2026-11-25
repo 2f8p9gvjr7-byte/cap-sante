@@ -65,6 +65,9 @@ nav button.on{color:var(--teal);font-weight:600}
 .verdict.bad{background:var(--bad-l);color:var(--bad)}
 .verdict.flat{background:var(--warn-l);color:var(--warn)}
 .verdict .ic{font-size:24px;line-height:1}
+.bgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.bbtn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);font:inherit;font-size:15px}
+.bbtn small{color:var(--muted);font-size:12px}
 .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden;margin:6px 0}
 .bar i{display:block;height:100%;background:var(--teal)}
 .muted{color:var(--muted);font-size:14px}
@@ -141,6 +144,7 @@ input::placeholder{color:#6f7da0}
   <button data-t="bilan"><span>📈</span>Tendance</button>
 </nav>
 <input type="file" id="fileIn" accept="application/json,.json" class="hidden">
+<input type="file" id="pleinIn" accept="application/json,.json" class="hidden">
 <script>
 /* ---------- Données ---------- */
 const AXES = {
@@ -418,6 +422,7 @@ const MOINS = [
 /* Eau : millilitres bus dans la journée, comparés à l'objectif personnel */
 const EAU_MAX = 1500;   // au-delà, plus de bonus
 function eauMl(x){
+  if(x.boissons && x.boissons.length) return x.boissons.reduce((a,e) => a + Math.round(e.ml * (BOIS[e.type] ? BOIS[e.type].k : 1)), 0);
   if(x.eauMl!=null) return x.eauMl;
   if(x.eauNiv) return {1:700, 2:1250, 3:1500}[x.eauNiv];   // anciennes saisies
   if(x.p && x.p.eau) return 1500;
@@ -512,7 +517,7 @@ function syncMarche(x){ x.marche = (x.marches||[]).reduce((t,w)=>t+walkMin(w),0)
 function hasJournal(x){ return !!(x && x.j && Object.values(x.j).some(a => a && a.length)); }
 function hasData(x){
   if(!x) return false;
-  if(x.marche||x.piscine||x.autre||x.avocat||x.eauNiv||x.eauMl||(x.med&&x.med.length)||(x.marches&&x.marches.length)) return true;
+  if(x.marche||x.piscine||x.autre||x.avocat||x.eauNiv||x.eauMl||(x.boissons&&x.boissons.length)||(x.med&&x.med.length)||(x.marches&&x.marches.length)) return true;
   if((x.repas||[]).some(Boolean)) return true;
   if(hasJournal(x)) return true;
   return [x.p,x.m,x.n].some(o => o && Object.values(o).some(Boolean));
@@ -767,10 +772,178 @@ function rJour(){
 }
 
 /* Sections de saisie ouvertes en plein écran */
+/* ---------- Boissons (repris de l'appli Le Plein) ----------
+   x.boissons = [{type, ml, ts}] ; l'eau comptée = ml × coefficient d'hydratation.
+   Jus, soda, lait, soupe, thé sucré : un aliment lié (bv = ts) est ajouté au repas de l'heure, pour les sucres et calories. */
+const BOIS_BASE = [
+  { id:"eau",      n:"Eau",      c:"#5dade2", k:1,  def:250, p:[[150,"Petit verre"],[250,"Verre"],[330,"Grand verre"],[500,"Bouteille"],[750,"Gourde"]] },
+  { id:"the",      n:"Thé",      c:"#7fd8a8", k:.9, def:250, p:[[150,"Tasse"],[250,"Mug"],[350,"Grand mug"],[500,"Théière"]] },
+  { id:"the_m",    n:"Thé menthe sucré", c:"#5fbf7f", k:.9, def:150, icon:"the", fd:"the_m", p:[[100,"Petit verre"],[150,"Verre"],[250,"Mug"]] },
+  { id:"infusion", n:"Infusion", c:"#c3a3e6", k:1,  def:250, p:[[150,"Tasse"],[250,"Mug"],[350,"Grand mug"],[500,"Théière"]] },
+  { id:"cafe",     n:"Café",     c:"#9a6646", k:.8, def:40,  p:[[30,"Ristretto"],[40,"Expresso"],[80,"Double"],[120,"Allongé"],[250,"Mug"]] },
+  { id:"lait",     n:"Lait",     c:"#eae6dc", k:.9, def:200, fd:"lait", p:[[100,"Petit"],[200,"Verre"],[250,"Bol"],[330,"Grand"]] },
+  { id:"jus",      n:"Jus",      c:"#f5a623", k:.9, def:200, fd:"jus", p:[[125,"Petit"],[200,"Verre"],[250,"Brique"],[330,"Bouteille"]] },
+  { id:"soda",     n:"Soda",     c:"#e85d4f", k:.9, def:330, fd:"soda", p:[[150,"Mini"],[250,"Petite"],[330,"Canette"],[500,"Bouteille"]] },
+  { id:"soupe",    n:"Soupe",    c:"#e8c547", k:.9, def:250, fd:"soupe", p:[[120,"Louche"],[250,"Bol"],[300,"Assiette"],[350,"Grand bol"]] }
+];
+let BOIS = {};
+function refreshBois(){
+  const custom = (S.bCustom||[]).map(x => { const like = BOIS_BASE.find(b => b.id===x.icon) || BOIS_BASE[0]; return Object.assign({}, x, {p: like.p}); });
+  BOIS = Object.fromEntries(BOIS_BASE.concat(custom).map(d => [d.id, d]));
+}
+refreshBois();
+const boisVisibles = () => Object.values(BOIS).filter(d => !d.gone && !(S.bHidden||[]).includes(d.id));
+function glyph(id, c){
+  if(BOIS[id] && BOIS[id].icon) id = BOIS[id].icon;
+  const sh = {
+    eau:'<path d="M7 5h20l-3 30H10z" fill="none" stroke="'+c+'" stroke-width="2.4" stroke-linejoin="round"/><path d="M9 16h16l-1.9 17H10.9z" fill="'+c+'"/>',
+    the:'<path d="M5 14h20v10a8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8z" fill="'+c+'"/><path d="M25 17h2a4 4 0 0 1 0 8h-2" fill="none" stroke="'+c+'" stroke-width="2.4"/><path d="M15 4v7m0 0-3 3h6z" stroke="'+c+'" stroke-width="1.8" fill="'+c+'"/>',
+    infusion:'<path d="M5 14h20v10a8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8z" fill="'+c+'"/><path d="M25 17h2a4 4 0 0 1 0 8h-2" fill="none" stroke="'+c+'" stroke-width="2.4"/><path d="M11 10c0-3 3-3 3-6M17 10c0-3 3-3 3-6" stroke="'+c+'" stroke-width="2" fill="none" stroke-linecap="round"/>',
+    cafe:'<path d="M6 10h22l-1 4H7z" fill="#eae6dc"/><path d="M5 7a3 3 0 0 1 3-3h18a3 3 0 0 1 3 3v3H5z" fill="#eae6dc"/><path d="M8 14h18l-2.6 22H10.6z" fill="'+c+'"/>',
+    lait:'<path d="M11 3h12v6l4 6v20H7V15l4-6z" fill="'+c+'"/><path d="M7 20h20v8H7z" fill="#5dade2"/>',
+    jus:'<path d="M7 9h20l-3 27H10z" fill="'+c+'"/><path d="M20 12 25 2" stroke="#e85d4f" stroke-width="2.4" stroke-linecap="round"/><circle cx="25" cy="10" r="4" fill="#f0b97a"/>',
+    soda:'<rect x="8" y="5" width="18" height="31" rx="4" fill="'+c+'"/><rect x="10" y="3" width="14" height="4" rx="1.5" fill="#a0b0c8"/><path d="M8 17h18v7H8z" fill="#fff" opacity=".85"/>',
+    soupe:'<path d="M3 18h28a14 14 0 0 1-28 0z" fill="'+c+'"/><path d="M10 12c0-3 3-3 3-6M18 12c0-3 3-3 3-6" stroke="'+c+'" stroke-width="2" fill="none" stroke-linecap="round"/>'
+  };
+  return '<svg viewBox="0 0 34 40" width="30" height="34" aria-hidden="true">' + (sh[id] || sh.eau) + '</svg>';
+}
+const repasDeLHeure = h => h < 10.5 ? "pdj" : h < 15 ? "dej" : h < 18 ? "enc" : "din";
+function boisAjout(type, ml, ts){
+  const d = BOIS[type]; if(!d || !(ml>0)) return;
+  const now = new Date(), t = ts || (cur===today() ? Date.now() : parse(cur).getTime() + 12*3600e3 + (day(cur).boissons||[]).length*60e3);
+  edit(x => {
+    x.boissons = x.boissons || []; x.boissons.push({type, ml:Math.round(ml), ts:t});
+    if(d.fd && FOODS[d.fd]){ const m = cur===today() ? repasDeLHeure(now.getHours()+now.getMinutes()/60) : "enc";
+      x.j = x.j || {}; (x.j[m] = x.j[m] || []).push({f:d.fd, g:Math.round(ml), bv:t}); }
+  });
+  S.bLast = S.bLast || {}; S.bLast[type] = Math.round(ml); save();
+}
+function boisModif(ts, ml){ edit(x => { const e = (x.boissons||[]).find(e => e.ts===ts); if(!e) return; e.ml = Math.round(ml);
+  Object.values(x.j||{}).forEach(a => a.forEach(it => { if(it.bv===ts) it.g = Math.round(ml); })); }); }
+function boisSuppr(ts){ edit(x => { x.boissons = (x.boissons||[]).filter(e => e.ts!==ts);
+  for(const m in (x.j||{})) x.j[m] = x.j[m].filter(it => it.bv!==ts); }); }
+let BSEL = null;   // {type, ml, ts?} : boisson en cours d’ajout ou de modification
+function jauge(ml){
+  const lvl = Math.min(1, ml/S.eau), h = 96, y = 12 + (1-lvl)*h, col = lvl>=1 ? "var(--good)" : "#5dade2";
+  return `<svg viewBox="0 0 70 124" width="62" height="110" aria-hidden="true">
+    <rect x="12" y="10" width="40" height="${h+4}" rx="8" fill="#0b1428" stroke="var(--line)" stroke-width="2"/>
+    <rect x="14" y="${y}" width="36" height="${12+h-y}" rx="6" fill="${col}" opacity=".9"/>
+    ${[["F",12],["½",12+h/2],["E",12+h]].map(([t,yy])=>`<line x1="52" x2="58" y1="${yy}" y2="${yy}" stroke="#ccfbf1"/><text x="61" y="${yy+4}" font-size="10" fill="#ccfbf1">${t}</text>`).join("")}
+  </svg>`;
+}
+function htmlBoissons(x){
+  const ml = eauMl(x), pct = Math.round(ml/S.eau*100), arr = x.boissons||[], last = (S.bLast||{}).eau || 250;
+  const ancien = !arr.length && x.eauMl ? `<p class="muted" style="margin:6px 0 0;font-size:14px">Total noté à l’ancienne : ${fmt(x.eauMl,0)} ml. Dès la première boisson ajoutée ici, c’est la liste qui compte.</p>` : "";
+  const sel = BSEL ? (() => { const d = BOIS[BSEL.type]; return `<div class="card" style="border:1px solid var(--teal)">
+      <div style="display:flex;align-items:center;gap:10px">${glyph(d.id,d.c)}<b style="font-size:18px">${esc(d.n)}</b></div>
+      <div class="chips" style="margin:10px 0">${d.p.map(([v,l])=>`<button class="chip ${BSEL.ml===v?"on":""}" data-bml="${v}">${l} · ${v} ml</button>`).join("")}</div>
+      <div style="display:flex;align-items:center;gap:8px"><input id="bIn" type="text" inputmode="numeric" value="${BSEL.ml}" style="width:110px;padding:8px;font-size:20px;font-weight:700;text-align:center;border:1px solid var(--line);border-radius:10px"><span>ml</span>
+        ${d.k<1?`<small class="muted">compte ${Math.round(BSEL.ml*d.k)} ml d’eau</small>`:""}</div>
+      ${d.fd?`<p class="muted" style="margin:8px 0 0;font-size:14px">Compte aussi dans les sucres et calories (ajouté au repas de l’heure).</p>`:""}
+      <button class="btn" id="bOk" style="margin-top:12px">${BSEL.ts?"Enregistrer":"Ajouter"}</button>
+      ${BSEL.ts?`<button class="btn danger" id="bDel" style="margin-top:8px">Supprimer</button>`:""}
+      <button class="btn sec" id="bNo" style="margin-top:8px">Annuler</button></div>`; })() : "";
+  return `
+  <div class="card">
+    <h2>🥤 Boissons</h2>
+    <div style="display:flex;align-items:center;gap:14px">
+      ${jauge(ml)}
+      <div style="flex:1"><div style="font-size:30px;font-weight:800">${fmt(ml,0)} <span style="font-size:16px;font-weight:600">ml</span></div>
+        <div class="muted">objectif ${fmt(S.eau,0)} ml · <b style="color:${pct>=100?"var(--good)":"var(--warn)"}">${pct} %</b>${pct>=100?" ✅":""}</div>
+        <div class="bar" style="margin-top:6px"><i style="width:${Math.min(100,pct)}%;background:${pct>=100?"var(--good)":"var(--warn)"}"></i></div>
+        ${pct<100?`<small class="muted">encore ${fmt(S.eau-ml,0)} ml</small>`:""}</div>
+    </div>
+    ${ancien}
+    <button class="btn" data-bq="1" style="margin-top:12px">💧 + Eau ${last} ml</button>
+  </div>
+  ${sel}
+  <div class="card">
+    <h2 style="margin-top:0">Ajouter une boisson</h2>
+    <div class="bgrid">${boisVisibles().map(d=>`<button class="bbtn" data-bd="${d.id}">${glyph(d.id,d.c)}<span>${esc(d.n)}</span><small>${(S.bLast||{})[d.id]||d.def} ml</small></button>`).join("")}</div>
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0">Bu ${cur===today()?"aujourd’hui":"ce jour-là"} <small class="muted" style="font-weight:400">${arr.length} prise${arr.length>1?"s":""}</small></h2>
+    ${arr.length ? [...arr].reverse().map(e => { const d = BOIS[e.type] || BOIS.eau;
+      return `<div class="item" data-bedit="${e.ts}" style="cursor:pointer">${glyph(d.id,d.c)}<div style="flex:1;margin-left:8px">${esc(d.n)}<small>${new Date(e.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}${d.k<1?" · compte "+Math.round(e.ml*d.k)+" ml":""}</small></div><b>${fmt(e.ml,0)} ml</b><button class="chip" data-bdel="${e.ts}" aria-label="Supprimer" style="margin-left:8px">✕</button></div>`; }).join("")
+      : `<p class="muted" style="margin:0">Rien bu pour l’instant. Touchez une boisson pour faire le plein.</p>`}
+  </div>
+  <details class="card"><summary style="cursor:pointer;font-weight:600">⏰ Rappels et objectif</summary>
+    <label class="f" style="margin-top:10px">Objectif (ml) <input type="number" inputmode="numeric" id="bGoal" value="${S.eau}"></label>
+    <div style="display:flex;gap:8px"><label class="f" style="flex:1">De <input type="time" id="bFrom" value="${S.bFrom||"08:00"}"></label><label class="f" style="flex:1">À <input type="time" id="bTo" value="${S.bTo||"21:00"}"></label></div>
+    <label class="f">Toutes les <select id="bEvery">${[60,90,120,180].map(v=>`<option value="${v}" ${(S.bEvery||90)===v?"selected":""}>${v<120?v+" min":v/60+" h"}</option>`).join("")}</select></label>
+    <button class="btn sec" id="bIcs">📅 Ajouter les rappels au Calendrier</button>
+    <p class="muted" style="font-size:13px;margin:6px 0 0">Le Calendrier de l’iPhone vous préviendra même appli fermée. Dans l’appli, un bandeau rappelle aussi de boire si la dernière boisson date de trop longtemps.</p>
+  </details>
+  <details class="card"><summary style="cursor:pointer;font-weight:600">📥 Reprendre l’historique de Le Plein</summary>
+    <p class="muted" style="font-size:14px">Dans Le Plein : Réglages → Exporter. Puis ici :</p>
+    <button class="btn sec" id="bImp">Importer le fichier de Le Plein</button>
+  </details>`;
+}
+function bindBoissons(root){
+  const $ = id => root.querySelector("#"+id);
+  root.querySelectorAll("[data-bq]").forEach(b => b.onclick = () => boisAjout("eau", (S.bLast||{}).eau || 250));
+  root.querySelectorAll("[data-bd]").forEach(b => b.onclick = () => { const d = BOIS[b.dataset.bd]; BSEL = {type:d.id, ml:(S.bLast||{})[d.id]||d.def}; ovRefresh && ovRefresh(); ov.querySelector(".body").scrollTop = 0; });
+  root.querySelectorAll("[data-bedit]").forEach(b => b.onclick = ev => { if(ev.target.closest("[data-bdel]")) return; const e = (day(cur).boissons||[]).find(e => e.ts===+b.dataset.bedit); if(!e) return; BSEL = {type:e.type, ml:e.ml, ts:e.ts}; ovRefresh && ovRefresh(); ov.querySelector(".body").scrollTop = 0; });
+  root.querySelectorAll("[data-bdel]").forEach(b => b.onclick = ev => { ev.stopPropagation(); boisSuppr(+b.dataset.bdel); });
+  root.querySelectorAll("[data-bml]").forEach(b => b.onclick = () => { BSEL.ml = +b.dataset.bml; ovRefresh && ovRefresh(); });
+  // pas de réaffichage pendant la frappe : sinon le toucher sur « Ajouter » serait perdu
+  if($("bIn")) $("bIn").oninput = () => { const v = parseFloat($("bIn").value.replace(",",".")); if(v>0) BSEL.ml = Math.round(v); };
+  if($("bOk")) $("bOk").onclick = () => { const v = parseFloat($("bIn").value.replace(",",".")); const s0 = BSEL; BSEL = null;
+    if(!(v>0)){ ovRefresh && ovRefresh(); return; } s0.ts ? boisModif(s0.ts, v) : boisAjout(s0.type, v); };
+  if($("bDel")) $("bDel").onclick = () => { const t = BSEL.ts; BSEL = null; boisSuppr(t); };
+  if($("bNo")) $("bNo").onclick = () => { BSEL = null; ovRefresh && ovRefresh(); };
+  if($("bGoal")) $("bGoal").onchange = e => { const v = parseInt(e.target.value); if(v>=300 && v<=4000){ S.eau = v; save(); ovRefresh && ovRefresh(); } };
+  ["bFrom","bTo","bEvery"].forEach(id => { if($(id)) $(id).onchange = e => { S[id] = id==="bEvery" ? +e.target.value : e.target.value; save(); }; });
+  if($("bIcs")) $("bIcs").onclick = () => calendrierEau();
+  if($("bImp")) $("bImp").onclick = () => document.getElementById("pleinIn").click();
+}
+function crenaux(){
+  const [fh,fm] = (S.bFrom||"08:00").split(":").map(Number), [th,tm] = (S.bTo||"21:00").split(":").map(Number), out = [];
+  for(let m = fh*60+fm; m <= th*60+tm; m += (S.bEvery||90)) out.push(m);
+  return out;
+}
+function calendrierEau(){
+  const p = n => String(n).padStart(2,"0"), d = new Date(), ds = d.getFullYear()+p(d.getMonth()+1)+p(d.getDate());
+  const stamp = new Date().toISOString().replace(/[-:]/g,"").slice(0,15)+"Z";
+  let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Cap Sante//FR\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\nX-WR-CALNAME:Cap Santé — boire\r\n";
+  crenaux().forEach((m,i) => { const e = m+5;
+    ics += "BEGIN:VEVENT\r\nUID:capsante-eau-"+ds+"-"+i+"@capsante\r\nDTSTAMP:"+stamp+"\r\nDTSTART:"+ds+"T"+p(Math.floor(m/60))+p(m%60)+"00\r\nDTEND:"+ds+"T"+p(Math.floor(e/60))+p(e%60)+"00"
+      +"\r\nRRULE:FREQ=DAILY\r\nSUMMARY:💧 Un verre d’eau\r\nTRANSP:TRANSPARENT\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Un verre d’eau\r\nTRIGGER:PT0M\r\nEND:VALARM\r\nEND:VEVENT\r\n"; });
+  ics += "END:VCALENDAR\r\n";
+  const a = document.createElement("a"); a.href = "data:text/calendar;charset=utf-8,"+encodeURIComponent(ics); a.target = "_blank"; a.rel = "noopener";
+  document.body.append(a); a.click(); setTimeout(() => a.remove(), 1000);
+}
+/* bandeau « pensez à boire » : aujourd’hui, dans les horaires, objectif pas atteint, dernière boisson trop ancienne */
+function rappelBoire(){
+  if(cur!==today()) return "";
+  const x = day(cur), ml = eauMl(x); if(ml >= S.eau) return "";
+  const n = new Date(), m = n.getHours()*60+n.getMinutes(), c = crenaux(); if(!c.length || m < c[0] || m > c[c.length-1]+30) return "";
+  const arr = x.boissons||[], der = arr.length ? Math.max(...arr.map(e=>e.ts)) : 0;
+  if(der && Date.now()-der < (S.bEvery||90)*60e3) return "";
+  const depuis = der ? Math.round((Date.now()-der)/60e3) : null;
+  return `<div class="card" style="border:1px solid #5dade2;display:flex;align-items:center;gap:10px">${glyph("eau","#5dade2")}
+    <div style="flex:1"><b>Pensez à boire</b><br><small class="muted">${depuis!=null ? "Dernière boisson il y a "+(depuis>=60?Math.floor(depuis/60)+" h "+String(depuis%60).padStart(2,"0"):depuis+" min") : "Rien bu aujourd’hui"} · encore ${fmt(S.eau-ml,0)} ml</small></div>
+    <button class="chip" data-bq="1">+ ${(S.bLast||{}).eau||250} ml</button></div>`;
+}
+/* import de la sauvegarde de Le Plein */
+function importPlein(d){
+  if(!d || typeof d.log !== "object") throw new Error("pas un fichier Le Plein");
+  let n = 0;
+  Object.entries(d.log).forEach(([k, arr]) => { if(!Array.isArray(arr) || !arr.length) return;
+    const x = day(k); x.boissons = x.boissons || [];
+    arr.forEach(e => { if(e && e.type && e.ml>0 && !x.boissons.some(b => b.ts===e.ts)){ x.boissons.push({type:e.type, ml:Math.round(e.ml), ts:e.ts||Date.now()}); n++; } });
+    x.boissons.sort((a,b) => a.ts-b.ts); D[k] = x; });
+  if(Array.isArray(d.custom)) S.bCustom = d.custom.map(c => ({id:c.id, n:c.n, c:c.c, k:c.k||1, def:c.def||250, icon:c.icon||"eau", gone:c.gone}));
+  if(Array.isArray(d.hidden)) S.bHidden = d.hidden;
+  if(d.last) S.bLast = Object.assign({}, d.last, S.bLast||{});
+  if(d.from) S.bFrom = d.from; if(d.to) S.bTo = d.to; if(d.every) S.bEvery = +d.every;
+  refreshBois(); save(); return n;
+}
+
 let ovRefresh = null;
 const SECTIONS = {
   act:{titre:"🚶 Activité", html:htmlActivite},
-  eau:{titre:"💧 Eau", html:htmlEau},
+  eau:{titre:"🥤 Boissons", html:htmlBoissons},
   med:{titre:"💊 Médicaments", html:htmlMeds},
   quick:{titre:"⚡ Liste rapide", html:htmlQuick}
 };
@@ -784,6 +957,7 @@ function openSection(k){
   ovRefresh = () => openSection(k); ovRefresh.k = k;
   document.getElementById("ovx").onclick = () => { closeOv(); render(); };
   bindDay(ov);
+  if(k==="eau") bindBoissons(ov);
   const sq = ov.querySelector("#showQuick"); if(sq) sq.onclick = () => { quickOpen = !quickOpen; openSection(k); };
 }
 
@@ -1020,7 +1194,7 @@ function openNutri(k){
 }
 /* ---------- Saisie : tout ce qu'on remplit, en ronds colorés ---------- */
 const BULLES2 = {act:{ico:"🚶", nom:"Activité", g:"linear-gradient(160deg,#8a6cf0,#b9a3f8)"},
-                 eau:{ico:"💧", nom:"Eau", g:"linear-gradient(160deg,#1fb8dc,#71dcef)"},
+                 eau:{ico:"🥤", nom:"Boissons", g:"linear-gradient(160deg,#1fb8dc,#71dcef)"},
                  med:{ico:"💊", nom:"Médicaments", g:"linear-gradient(160deg,#e0609f,#f29cc6)"}};
 function rRepas(){
   const x = day(cur);
@@ -1041,6 +1215,7 @@ function rRepas(){
   const medTxt = Object.entries(meds).map(([n,c]) => n+(c>1?" ×"+c:""));
   app.innerHTML = `
   ${dateBar()}
+  ${rappelBoire()}
   <h3 style="margin:4px 4px 6px">Repas</h3>
   <div class="repasfond">${repas}</div>
   <h3 style="margin:4px 4px 6px">Au quotidien</h3>
@@ -1054,6 +1229,7 @@ function rRepas(){
   bindDateBar();
   app.querySelectorAll("[data-meal]").forEach(b => b.onclick = () => openMeal(b.dataset.meal));
   app.querySelectorAll("[data-sec]").forEach(b => b.onclick = () => openSection(b.dataset.sec));
+  bindBoissons(app);
 }
 
 const ov = document.getElementById("ov");
@@ -1810,7 +1986,7 @@ function rReglages(){
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
     <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
-    <p class="muted">Version 62</p>
+    <p class="muted">Version 63</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
@@ -1842,10 +2018,20 @@ document.getElementById("fileIn").onchange = e => {
       const j = JSON.parse(r.result); let n = 0;
       if(j.days && typeof j.days==="object"){ Object.assign(D, j.days); n++; }
       if(Array.isArray(j.labs)){ j.labs.forEach(e => { if(e && e.date){ L = L.filter(x=>x.date!==e.date).concat([e]); } }); n++; }
-      if(j.settings && typeof j.settings==="object"){ Object.assign(S, j.settings); registerPerso(); registerCiq(); n++; }
+      if(j.settings && typeof j.settings==="object"){ Object.assign(S, j.settings); registerPerso(); registerCiq(); refreshBois(); n++; }
       if(!n) throw 0;
       save(); alert("Import réussi."); render();
     }catch(err){ alert("Ce fichier n’est pas reconnu."); }
+    e.target.value = "";
+  };
+  r.readAsText(f);
+};
+document.getElementById("pleinIn").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{ const n = importPlein(JSON.parse(r.result)); alert(n ? n+" boissons reprises de Le Plein." : "Rien de nouveau à reprendre (déjà importé ?)."); render(); if(ovRefresh) ovRefresh(); }
+    catch(err){ alert("Ce fichier ne vient pas de Le Plein."); }
     e.target.value = "";
   };
   r.readAsText(f);
