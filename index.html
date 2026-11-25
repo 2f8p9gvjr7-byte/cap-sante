@@ -781,6 +781,8 @@ const BOIS_BASE = [
   { id:"the_m",    n:"Thé menthe sucré", c:"#5fbf7f", k:.9, def:150, icon:"the", fd:"the_m", p:[[100,"Petit verre"],[150,"Verre"],[250,"Mug"]] },
   { id:"infusion", n:"Infusion", c:"#c3a3e6", k:1,  def:250, p:[[150,"Tasse"],[250,"Mug"],[350,"Grand mug"],[500,"Théière"]] },
   { id:"cafe",     n:"Café",     c:"#9a6646", k:.8, def:40,  p:[[30,"Ristretto"],[40,"Expresso"],[80,"Double"],[120,"Allongé"],[250,"Mug"]] },
+  { id:"deca",     n:"Déca",     c:"#6fc3df", k:.9, def:40,  icon:"cafe", p:[[40,"Expresso"],[80,"Double"],[110,"Tasse"],[250,"Mug"]] },
+  { id:"citron",   n:"Citron pressé", c:"#e8c547", k:1, def:100, icon:"eau", p:[[50,"Petit"],[100,"Verre"],[200,"Grand verre"]] },
   { id:"lait",     n:"Lait",     c:"#eae6dc", k:.9, def:200, fd:"lait", p:[[100,"Petit"],[200,"Verre"],[250,"Bol"],[330,"Grand"]] },
   { id:"jus",      n:"Jus",      c:"#f5a623", k:.9, def:200, fd:"jus", p:[[125,"Petit"],[200,"Verre"],[250,"Brique"],[330,"Bouteille"]] },
   { id:"soda",     n:"Soda",     c:"#e85d4f", k:.9, def:330, fd:"soda", p:[[150,"Mini"],[250,"Petite"],[330,"Canette"],[500,"Bouteille"]] },
@@ -1986,7 +1988,7 @@ function rReglages(){
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
     <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
-    <p class="muted">Version 63</p>
+    <p class="muted">Version 64</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
