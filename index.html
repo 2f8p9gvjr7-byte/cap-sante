@@ -917,7 +917,9 @@ function openDetail(axe, semaine){
 function nutBar(label, v, lim, unit, dec=0, goodIfAbove=false){
   const pct = Math.min(100, Math.round(v/lim*100));
   const over = goodIfAbove ? false : v>lim;
-  return `<span>${label}</span><span><b>${fmt(v,dec)}</b> / ${goodIfAbove?"":"max "}${fmt(lim,0)} ${unit}</span><div class="bar ${over?"over":""}"><i style="width:${pct}%${goodIfAbove?";background:var(--good)":""}"></i></div>`;
+  // vert = bien en dessous du max, orange = on s’en approche (80 % et plus), rouge = dépassé
+  const coul = goodIfAbove ? "var(--good)" : over ? "var(--bad)" : v >= lim*0.8 ? "var(--warn)" : "var(--good)";
+  return `<span>${label}</span><span><b>${fmt(v,dec)}</b> / ${goodIfAbove?"":"max "}${fmt(lim,0)} ${unit}</span><div class="bar ${over?"over":""}"><i style="width:${pct}%;background:${coul}"></i></div>`;
 }
 function lastMeal(m){
   for(let i=1;i<=14;i++){ const s = addDays(cur,-i); const d = D[s];
@@ -1808,7 +1810,7 @@ function rReglages(){
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
     <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
-    <p class="muted">Version 61</p>
+    <p class="muted">Version 62</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
