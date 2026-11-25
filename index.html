@@ -136,8 +136,8 @@ input::placeholder{color:#6f7da0}
 <div id="ov"></div>
 <div id="upd">Nouvelle version disponible <button id="updBtn">Mettre à jour</button></div>
 <nav>
-  <button data-t="jour" class="on"><span>📊</span>Tableau de bord</button>
   <button data-t="repas"><span>✍️</span>Saisie</button>
+  <button data-t="jour"><span>📊</span>Tableau de bord</button>
   <button data-t="bilan"><span>📈</span>Tendance</button>
 </nav>
 <input type="file" id="fileIn" accept="application/json,.json" class="hidden">
@@ -609,6 +609,8 @@ function avg(from, n){
 
 /* ---------- Rendu ---------- */
 let tab = "jour", cur = today();
+// à l’ouverture : la Saisie si rien n’est encore noté aujourd’hui, sinon le tableau de bord
+if(!hasData(D[cur])) tab = "repas";
 let WD = {km:"", min:"", al:"n"};
 let quickOpen = false;   // liste rapide affichée même quand le journal des repas est rempli   // marche en cours de saisie
 const app = document.getElementById("app");
@@ -1806,7 +1808,7 @@ function rReglages(){
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
     <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
-    <p class="muted">Version 60</p>
+    <p class="muted">Version 61</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
