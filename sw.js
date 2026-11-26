@@ -1,5 +1,5 @@
-const CACHE = "cap-sante-v65";
-const ASSETS = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon-512.png", "/zxing.min.js", "/aliments.json"];
+const CACHE = "cap-sante-v67";
+const ASSETS = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon-512.png", "/apple-touch-icon-v2.png", "/zxing.min.js", "/aliments.json"];
 
 self.addEventListener("install", e => {
   // fichier par fichier : un fichier manquant ne bloque plus la mise à jour
