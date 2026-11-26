@@ -1105,7 +1105,7 @@ function lastMeal(m){
 function mealHTML(x, m){
   const items = x.j[m]||[], facs = mealFactors(items);
   // bouton d’ajout en haut : il reste visible même quand la liste s’allonge
-  return `<button class="add" style="margin:0 0 6px" data-addm="${m}">+ Ajouter un aliment</button>`
+  return `<button class="add" style="margin:0 0 6px" data-addm="${m}">+ Ajouter un aliment</button>` + choixHabituels(m)
     + (!items.length && lastMeal(m) ? `<button class="add" style="background:var(--card2);margin:0 0 6px" data-copym="${m}">↺ Reprendre celui ${esc(lastMeal(m).lbl)}</button>` : "")
     + items.map((it,i) => { const f = FOODS[it.f]; if(!f) return ""; const n = nutr(f,it.g);
       const ral = facs[i]<1 && (n.suc>=2 || (f.o.ig && n.gluc>=5));
@@ -1113,6 +1113,7 @@ function mealHTML(x, m){
 }
 function bindMeal(root){
   root.querySelectorAll("[data-addm]").forEach(b => b.onclick = () => openSearch(b.dataset.addm));
+  root.querySelectorAll("[data-habm]").forEach(sel => sel.onchange = () => { const f = sel.value; if(!f) return; openQty(sel.dataset.habm, f, derniereQte(f), -1); });
   root.querySelectorAll("[data-copym]").forEach(b => b.onclick = () => { const m = b.dataset.copym, lm = lastMeal(m); if(lm){ editJ(x => { x.j[m] = JSON.parse(JSON.stringify(lm.items)); }); render(); openMeal(m); } });
   root.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { if(dragJustEnded) return; const [m,i] = b.dataset.edit.split(":"); const it = day(cur).j[m][+i]; openQty(m, it.f, it.g, +i); });
   dragSort(root);
@@ -1152,6 +1153,29 @@ function dragSort(root){
     el.addEventListener("touchend", end); el.addEventListener("touchcancel", end);
     el.addEventListener("contextmenu", e => e.preventDefault());
   });
+}
+/* Mes habituels : les aliments notés le plus souvent (90 derniers jours), et la dernière quantité utilisée */
+function habituels(n){
+  const lim = addDays(today(),-90), cpt = {};
+  Object.keys(D).filter(k => k>=lim).forEach(k => { const vus = new Set();
+    Object.values((D[k]||{}).j||{}).forEach(a => a.forEach(it => { if(!it.bv && FOODS[it.f]) vus.add(it.f); }));
+    vus.forEach(f => cpt[f] = (cpt[f]||0)+1); });
+  return Object.keys(cpt).sort((a,b) => cpt[b]-cpt[a] || FOODS[a].n.localeCompare(FOODS[b].n)).slice(0, n||15);
+}
+function derniereQte(f){
+  const ks = Object.keys(D).sort().reverse();
+  for(const k of ks){ for(const a of Object.values((D[k]||{}).j||{})){ for(let i=a.length-1;i>=0;i--) if(a[i].f===f && !a[i].bv) return a[i].g; } }
+  return FOODS[f] ? FOODS[f].por[0][1] : 100;
+}
+function choixHabituels(m){
+  const hab = habituels(15), prod = (S.perso||[]).map(p => p.id).filter(id => FOODS[id] && !hab.includes(id));
+  if(!hab.length && !prod.length) return "";
+  const opt = id => `<option value="${id}">${esc(FOODS[id].n)}</option>`;
+  return `<select data-habm="${m}" style="width:100%;margin:0 0 8px;padding:12px;font:inherit;font-size:17px;border:1px solid var(--teal);border-radius:12px;background:var(--bg);color:var(--ink)">
+    <option value="">⭐ Choisir dans mes habituels…</option>
+    ${hab.length ? `<optgroup label="Les plus souvent">${hab.map(opt).join("")}</optgroup>` : ""}
+    ${prod.length ? `<optgroup label="Mes produits (scannés)">${prod.sort((a,b)=>FOODS[a].n.localeCompare(FOODS[b].n)).map(opt).join("")}</optgroup>` : ""}
+  </select>`;
 }
 function openMeal(m){
   const x = day(cur), b = BULLES[m], mt = totals(x, m), n = (x.j[m]||[]).length;
@@ -1252,8 +1276,8 @@ function openSearch(meal, rep){
     const s = norm(q.value.trim());
     let html = "";
     if(!s){
-      const rec = (S.recents||[]).map(id=>FOODS[id]).filter(Boolean);
-      if(rec.length) html += `<div class="cat">Récents</div>` + rec.map(line).join("");
+      const hab = habituels(15).map(id=>FOODS[id]);
+      if(hab.length) html += `<div class="cat">⭐ Mes habituels</div>` + hab.map(line).join("");
       const mp = (S.perso||[]).map(p=>FOODS[p.id]).filter(Boolean);
       if(mp.length) html += `<div class="cat">Mes produits</div>` + mp.map(line).join("");
       let c = "";
@@ -1277,11 +1301,11 @@ function openSearch(meal, rep){
       if(CIQ && !html.includes("data-f")) html = `<p class="muted">Aucun aliment trouvé. Essayez un autre mot, ou ajoutez le produit avec <b>📷 Scanner un code-barres</b> ou <b>📋 Lire une étiquette</b>.</p>`;
     }
     res.innerHTML = html;
-    res.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { keepCiq(b.dataset.f); rep ? openQty(meal, b.dataset.f, rep.g, rep.idx) : openQty(meal, b.dataset.f, FOODS[b.dataset.f].por[0][1], -1); });
+    res.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { keepCiq(b.dataset.f); rep ? openQty(meal, b.dataset.f, rep.g, rep.idx) : openQty(meal, b.dataset.f, derniereQte(b.dataset.f), -1); });
   };
   q.oninput = () => { if(!CIQ) ciqErr = ""; show(); }; show();
   document.getElementById("ovx").onclick = () => openMeal(meal);
-  setTimeout(()=>q.focus(), 50);
+  if(!(S.perso||[]).length && !habituels(1).length) setTimeout(()=>q.focus(), 50);   // clavier d’office seulement s’il n’y a pas d’habituels à montrer
 }
 /* ---------- Scanner un code-barres (Open Food Facts) ---------- */
 let zxLoad = null;
@@ -1988,7 +2012,7 @@ function rReglages(){
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
     <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
     <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
-    <p class="muted">Version 64</p>
+    <p class="muted">Version 65</p>
   </div>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
