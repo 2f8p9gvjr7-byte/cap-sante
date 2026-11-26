@@ -1,4 +1,4 @@
-const CACHE = "cap-sante-v67";
+const CACHE = "cap-sante-v68";
 const ASSETS = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon-512.png", "/apple-touch-icon-v2.png", "/zxing.min.js", "/aliments.json"];
 
 self.addEventListener("install", e => {

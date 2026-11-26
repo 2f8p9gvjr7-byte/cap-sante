@@ -1979,9 +1979,25 @@ function rAnalyses(){
 }
 
 function rReglages(){
+  const prods = (S.perso||[]).slice().sort((x,y) => x.n.localeCompare(y.n));
+  const det = (titre, contenu, ouvert) => `<details class="card" ${ouvert?"open":""}><summary style="cursor:pointer;font-size:19px;font-weight:700;padding:2px 0">${titre}</summary><div style="margin-top:10px">${contenu}</div></details>`;
   app.innerHTML = `
   <div class="card">
-    <h2>Objectifs</h2>
+    <h2>💾 Sauvegarde</h2>
+    <p class="muted" style="margin:0 0 4px;font-size:14px">${S.lastBackup ? `✅ Dernière sauvegarde : <b>${esc(new Date(S.lastBackup).toLocaleString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}))}</b>` : "Aucune sauvegarde faite avec cette version pour l’instant."}</p>
+    <button class="btn" id="exp">💾 Sauvegarder mes données</button>
+    <p class="muted" style="margin:6px 0 10px;font-size:14px">Dans le panneau qui s’ouvre : <b>« Enregistrer dans Fichiers »</b>, puis <b>« Enregistrer »</b>. Vos données ne sont que sur ce téléphone.</p>
+    <button class="btn sec" id="imp">♻️ Restaurer une sauvegarde</button>
+  </div>
+  <div class="card">
+    <h2>🛒 Mes produits <small class="muted" style="font-weight:400">${prods.length}</small></h2>
+    ${prods.length ? `<select id="pSel" style="width:100%;padding:12px;font:inherit;font-size:17px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink)">
+        <option value="">Voir ou supprimer un produit…</option>
+        ${prods.map(p=>`<option value="${esc(p.id)}">${esc(p.n)}</option>`).join("")}</select>
+      <div id="pInfo"></div>`
+      : `<p class="muted" style="margin:0">Aucun pour l’instant. Ils s’ajoutent quand vous scannez un code-barres ou lisez une étiquette.</p>`}
+  </div>
+  ${det("🎯 Mes objectifs", `
     <label class="f">Sexe <select id="ssexe"><option value="H" ${S.sexe!=="F"?"selected":""}>Homme</option><option value="F" ${S.sexe==="F"?"selected":""}>Femme</option></select></label>
     <p class="muted" style="margin:0">Sert aux seuils du HDL et du tour de taille.</p>
     <label class="f">Objectif LDL (g/l)
@@ -1991,39 +2007,31 @@ function rReglages(){
     <label class="f">Calories par jour (kcal) <input type="number" inputmode="numeric" id="skcal" value="${S.kcal}"></label>
     <p class="muted" style="margin:0">À fixer avec votre médecin ou un diététicien : il dépend de l’âge, du poids et de l’activité.</p>
     <label class="f">Objectif d’eau (ml) <input type="number" inputmode="numeric" id="seau" value="${S.eau}"></label>
-    <p class="muted" style="margin:0">Augmentez-le petit à petit, par exemple de 100 ml toutes les 2 semaines, jusqu’à 1 500 ml, sauf avis médical contraire.</p>
-  </div>
-  <div class="card">
-    <h2>Mes produits</h2>
-    ${(S.perso||[]).length ? S.perso.map(p=>`<div class="row"><div class="lbl">${esc(p.n)}<small>${Math.round(p.kcal)} kcal · sat. ${fmt(p.ags,1)} g · sucres ${fmt(p.suc,1)} g · sel ${fmt(p.sel,2)} g (pour 100 g)</small></div><button class="chip" data-delp="${esc(p.id)}">Suppr.</button></div>`).join("")
-      : `<p class="muted" style="margin:0">Aucun pour l’instant. Ajoutez-en depuis Saisie → un repas → Ajouter un aliment → 📷 Scanner ou 📋 Lire une étiquette.</p>`}
-  </div>
-  <div class="card">
-    <h2>Sauvegarde</h2>
-    <p class="muted" style="margin:0">Vos données restent uniquement sur ce téléphone. Faites une sauvegarde de temps en temps (dans Fichiers ou par mail).</p>
-    <button class="btn" id="exp">💾 Sauvegarder mes données</button>
-    <p class="muted" style="margin:6px 0 10px;font-size:14px">Dans le panneau qui s’ouvre, choisissez <b>« Enregistrer dans Fichiers »</b>, puis <b>« Enregistrer »</b>.
-      ${S.lastBackup ? `<br>✅ Dernière sauvegarde : <b>${esc(new Date(S.lastBackup).toLocaleString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}))}</b>` : "<br>Aucune sauvegarde faite pour l’instant."}</p>
-    <button class="btn sec" id="imp">♻️ Restaurer une sauvegarde</button>
-    <p class="muted" style="margin:6px 0 0;font-size:14px">« Restaurer » sert uniquement à récupérer une sauvegarde faite avec le bouton ci-dessus, par exemple sur un nouveau téléphone. Pour ajouter une prise de sang, allez dans <b>🩸 Analyses</b>.</p>
-    <button class="btn danger" id="rst">Tout effacer</button>
-  </div>
-  <div class="card">
-    <h2>Comment est calculé le score ?</h2>
+    <p class="muted" style="margin:0">Augmentez-le petit à petit, par exemple de 100 ml toutes les 2 semaines, jusqu’à 1 500 ml, sauf avis médical contraire.</p>`)}
+  ${det("❓ Le calcul du score", `
     <p class="muted">Chaque jour part d’une base, puis l’activité et les aliments ajoutent ou retirent des points sur trois lignes : Glycémie, Cholestérol et Reins. L’activité compte surtout pour la glycémie ; les graisses animales pour le cholestérol ; le sel, l’eau et certains médicaments (bicarbonate, anti-inflammatoires, magnésium) pour les reins.</p>
     <p class="muted">C’est un indicateur d’habitudes pour vous motiver, pas une mesure médicale. Il ne remplace ni la prise de sang ni l’avis de votre médecin.</p>
-    <p class="muted">Si vous détaillez vos repas dans l’onglet Saisie, le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas). Sinon, c’est la liste rapide qui compte.</p>
-    <p class="muted" style="font-size:13px">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>
-    <p class="muted">Version 67</p>
-  </div>`;
+    <p class="muted">Le calcul se fait à partir des quantités : calories, sucres ajoutés (définition de l’OMS : pas ceux des fruits entiers ni du lait nature), glucides rapides, graisses saturées, sel, fibres et poisson gras. Le sucré mangé après des légumes et des protéines compte moins (ordre du repas).</p>
+    <p class="muted" style="font-size:13px;margin:0">Valeurs nutritionnelles : Cap Santé, et pour les autres aliments la table Ciqual 2025 de l’Anses (licence ouverte). Produits scannés : Open Food Facts.</p>`)}
+  ${det("⚠️ Effacer toutes les données", `
+    <p class="muted" style="margin:0 0 8px">Efface tout le journal et les prises de sang de ce téléphone. Faites une sauvegarde avant.</p>
+    <button class="btn danger" id="rst">Tout effacer</button>`)}
+  <p class="muted" style="text-align:center">Version 68</p>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
   document.getElementById("seau").onchange = e => { const v = parseInt(e.target.value); if(v>=300 && v<=4000){ S.eau = v; save(); } };
   document.getElementById("skcal").onchange = e => { const v = parseInt(e.target.value); if(v>=1000){ S.kcal = v; save(); } };
   document.getElementById("exp").onclick = exporter;
-  app.querySelectorAll("[data-delp]").forEach(b => b.onclick = () => { const p = S.perso.find(x=>x.id===b.dataset.delp);
-    if(p && confirm("Supprimer « "+p.n+" » de Mes produits ?")){ S.perso = S.perso.filter(x=>x.id!==p.id); save(); registerPerso(); render(); } });
+  const pSel = document.getElementById("pSel");
+  if(pSel) pSel.onchange = () => {
+    const p = (S.perso||[]).find(x => x.id===pSel.value), box = document.getElementById("pInfo");
+    if(!p){ box.innerHTML = ""; return; }
+    box.innerHTML = `<div style="background:var(--bg);border-radius:12px;padding:10px 12px;margin-top:10px">
+      <b>${esc(p.n)}</b><div class="muted" style="font-size:14px;margin:4px 0 8px">Pour 100 g : ${Math.round(p.kcal)} kcal · graisses saturées ${fmt(p.ags,1)} g · sucres ${fmt(p.suc,1)} g · sel ${fmt(p.sel,2)} g</div>
+      <button class="btn danger" id="pDel">Supprimer ce produit</button></div>`;
+    document.getElementById("pDel").onclick = () => { if(confirm("Supprimer « "+p.n+" » de Mes produits ?")){ S.perso = S.perso.filter(x=>x.id!==p.id); save(); registerPerso(); render(); } };
+  };
   document.getElementById("imp").onclick = () => document.getElementById("fileIn").click();
   document.getElementById("rst").onclick = () => { if(confirm("Effacer toutes les données de l’application ?") && confirm("Vraiment tout effacer ?")){ D = {}; L = []; save(); render(); } };
 }
