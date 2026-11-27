@@ -67,6 +67,11 @@ nav button.on{background:var(--teal-l);color:var(--teal);font-weight:700;box-sha
 .verdict.flat{background:var(--warn-l);color:var(--warn)}
 .verdict .ic{font-size:24px;line-height:1}
 details.actrub summary::-webkit-details-marker{display:none}
+.saipli{margin:0 0 12px}
+.saipli>summary{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px}
+.saipli>summary::-webkit-details-marker{display:none}
+.saipli[open]>summary{border-color:var(--teal);margin-bottom:8px}
+.saipli .chev{font-size:24px;color:var(--teal)}
 .bgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .bbtn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);font:inherit;font-size:15px}
 .bbtn small{color:var(--muted);font-size:12px}
@@ -1298,19 +1303,32 @@ function rRepas(){
   const ml = eauMl(x);
   const meds = {}; (x.med||[]).forEach(m => { const nm = m.id==="autre" && m.txt ? m.txt : (MEDMAP[m.id]||MEDMAP.autre).l.replace(/ \(.*\)$/,""); meds[nm] = (meds[nm]||0)+1; });
   const medTxt = Object.entries(meds).map(([n,c]) => n+(c>1?" ×"+c:""));
+  // résumés des deux rubriques repliables
+  const nbRepas = MEALS.filter(([m]) => (x.j[m]||[]).some(it=>FOODS[it.f])).length, kTot = Math.round(totals(x).kcal);
+  const resRepas = nbRepas ? MEALS.filter(([m]) => (x.j[m]||[]).some(it=>FOODS[it.f])).map(([m]) => BULLES[m].ico+" "+Math.round(totals(x,m).kcal)).join("  ·  ") + `<br><b>${fmt(kTot,0)} kcal</b> au total`
+                           : "Rien de noté pour l’instant";
+  const actMin = (x.marches||[]).reduce((t,w)=>t+walkMin(w),0) + x.piscine + x.autre + sportMin(x);
+  const resQuot = [actMin ? "🚶 "+actMin+" min" : "🚶 —", "🥤 "+(ml ? fmt(ml,0)+" / "+fmt(S.eau,0)+" ml" : "—"), "💊 "+((x.med||[]).length || "—")].join("  ·  ");
+  const sa = S.saio || {};
+  const pli = (id, titre, resume, contenu) => `
+  <details class="saipli" data-sai="${id}" ${sa[id]?"open":""}>
+    <summary><span style="flex:1"><b style="font-size:21px">${titre}</b><br><small class="muted" style="font-size:15px;line-height:1.5">${resume}</small></span><span class="chev">${sa[id]?"▾":"›"}</span></summary>
+    ${contenu}
+  </details>`;
   app.innerHTML = `
   ${dateBar()}
   ${rappelBoire()}
-  <h3 style="margin:4px 4px 6px">Repas</h3>
-  <div class="repasfond">${repas}</div>
-  <h3 style="margin:4px 4px 6px">Au quotidien</h3>
+  ${pli("r","🍽️ Repas", resRepas, `<div class="repasfond">${repas}</div>
+    <button class="add" data-sec="quick" style="background:var(--card2);margin-top:8px">⚡ Pas le temps de détailler ? Liste rapide</button>`)}
+  ${pli("q","☀️ Au quotidien", resQuot, `
   <div class="repasfond">
     ${rond("act", BULLES2.act, actTxt.length ? actTxt.map(t=>`<span>${esc(t)}</span>`).join("") : "", "Rien de noté · touchez pour ajouter une marche")}
     ${rond("eau", BULLES2.eau, ml ? `<span>${fmt(ml,0)} / ${fmt(S.eau,0)} ml</span><span class="k" style="color:${ml>=S.eau?"var(--good)":"var(--warn)"}">${Math.round(ml/S.eau*100)} % de l’objectif</span>` : "", "Pas encore notée")}
     ${rond("med", BULLES2.med, medTxt.length ? `<span>${esc(medTxt.join(", "))}</span>` : "", "Rien de noté")}
-  </div>
-  <button class="add" data-sec="quick" style="background:var(--card2)">⚡ Pas le temps de détailler les repas ? Liste rapide</button>
-  <p class="muted">Les résultats (scores, calories, sel…) sont dans l’onglet <b>📊 Tableau de bord</b>.</p>`;
+  </div>`)}`;
+  app.querySelectorAll("details[data-sai]").forEach(d => d.addEventListener("toggle", () => {
+    S.saio = Object.assign({}, S.saio, {[d.dataset.sai]: d.open}); save();
+    d.querySelector(".chev").textContent = d.open ? "▾" : "›"; }));
   bindDateBar();
   app.querySelectorAll("[data-meal]").forEach(b => b.onclick = () => openMeal(b.dataset.meal));
   app.querySelectorAll("[data-sec]").forEach(b => b.onclick = () => openSection(b.dataset.sec));
@@ -2075,7 +2093,7 @@ function rReglages(){
   ${det("⚠️ Effacer toutes les données", `
     <p class="muted" style="margin:0 0 8px">Efface tout le journal et les prises de sang de ce téléphone. Faites une sauvegarde avant.</p>
     <button class="btn danger" id="rst">Tout effacer</button>`)}
-  <p class="muted" style="text-align:center">Version 71</p>`;
+  <p class="muted" style="text-align:center">Version 72</p>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
