@@ -22,12 +22,11 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.45 -apple-s
 header{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,#14234a,#0d1730);color:var(--ink);border-bottom:2px solid var(--teal);padding:calc(env(safe-area-inset-top) + 10px) 16px 10px}
 header h1{margin:0;font-size:22px;color:var(--teal);letter-spacing:.06em;text-transform:uppercase}
 header p{margin:2px 0 0;font-size:14px;opacity:.85}
-main{padding:12px 12px calc(env(safe-area-inset-bottom) + 24px);max-width:640px;margin:0 auto}
-nav{position:sticky;top:var(--hh,64px);z-index:4;display:flex;gap:4px;margin:0 0 12px;padding:4px;background:rgba(11,20,40,.94);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:16px;box-shadow:0 -6px 0 6px var(--bg),0 10px 18px rgba(0,0,0,.35)}
-nav button{flex:1;min-width:0;border:0;background:none;border-radius:12px;padding:7px 2px 6px;font:inherit;font-size:12.5px;line-height:1.15;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;white-space:nowrap}
-nav button span{font-size:19px;line-height:1}
-nav button.on{background:var(--teal-l);color:var(--teal);font-weight:700;box-shadow:inset 0 0 0 1px rgba(245,166,35,.45)}
-@media (max-width:340px){nav button{font-size:11px}}
+main{padding:12px 12px calc(env(safe-area-inset-bottom) + 90px);max-width:640px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:5;display:flex;background:#0a1226;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;padding:9px 2px 8px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button span{font-size:22px;line-height:1}
+nav button.on{color:var(--teal);font-weight:600}
 #menuBtn{border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--ink);border-radius:999px;padding:8px 14px;font:inherit;font-size:15px;font-weight:600}
 #menuBtn.on{background:var(--teal);color:#0d1730;border-color:var(--teal)}
 #menu{display:none;position:absolute;right:12px;top:calc(100% - 4px);background:#16244a;border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.5);overflow:hidden;min-width:230px}
@@ -84,7 +83,7 @@ th:first-child,td:first-child{text-align:left}
 .up{color:var(--good);font-weight:700}.down{color:var(--bad);font-weight:700}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px}
 .legend i{display:inline-block;width:12px;height:4px;border-radius:2px;margin-right:4px;vertical-align:middle}
-#upd{display:none;position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 16px);z-index:10;background:#1f2933;color:#fff;border-radius:14px;padding:12px 14px;align-items:center;gap:10px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+#upd{display:none;position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 76px);z-index:10;background:#1f2933;color:#fff;border-radius:14px;padding:12px 14px;align-items:center;gap:10px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 #upd button{margin-left:auto;background:var(--card2);color:#1f2933;border:0;border-radius:10px;padding:8px 12px;font-weight:600;font-size:15px}
 .hidden{display:none}
 .tip{font-size:14px;background:var(--teal-l);border-radius:10px;padding:10px;margin-top:8px}
@@ -500,7 +499,7 @@ const fmtShort = s => parse(s).toLocaleDateString("fr-FR", {day:"2-digit", month
 const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-function blank(){ return {marche:0, marches:[], med:[], piscine:0, autre:0, repas:[false,false,false], p:{}, m:{}, n:{}, avocat:0, j:{}}; }
+function blank(){ return {marche:0, marches:[], sports:[], med:[], piscine:0, autre:0, repas:[false,false,false], p:{}, m:{}, n:{}, avocat:0, j:{}}; }
 function day(s){
   const x = D[s] ? Object.assign(blank(), JSON.parse(JSON.stringify(D[s]))) : blank();
   if(!D[s] || !D[s].marches) x.marches = x.marche ? [{min:x.marche, al:"n"}] : [];
@@ -511,6 +510,16 @@ function day(s){
 /* Marches : durée saisie, sinon distance convertie selon l'allure */
 const PACE = {l:20, n:15, r:12};          // minutes par km
 const INTENS = {l:0.8, n:1, r:1.2};        // effet sur le score
+/* Autres sports : coefficient du sport × intensité (facile / soutenu / dur) */
+const SPORTS = [
+  ["velo_app","🚴 Vélo d’appartement",1], ["velo","🚲 Vélo",1], ["tennis","🎾 Tennis",1.2], ["gym","🏋️ Gym, renforcement",0.9],
+  ["aquagym","🤽 Aquagym",1], ["rando","🥾 Randonnée",1.2], ["danse","💃 Danse",1], ["jardin","🌱 Jardinage",0.7],
+  ["yoga","🧘 Yoga, Pilates",0.6], ["autre","➕ Autre",1]];
+const SPORTMAP = Object.fromEntries(SPORTS.map(([id,n,k]) => [id,{n,k}]));
+const SINT = {f:[0.8,"Facile"], s:[1.25,"Soutenu"], d:[1.5,"Dur"]};
+const sportMin = x => (x.sports||[]).reduce((t,e)=>t+e.min,0);
+const sportEff = x => (x.sports||[]).reduce((t,e)=>t+e.min*(SPORTMAP[e.sp]||SPORTMAP.autre).k*SINT[e.al||"s"][0],0);
+let SD = {sp:"velo_app", min:"", al:"s"};
 const ALLURE = {l:"lente", n:"normale", r:"rapide"};
 const walkMin = w => w.min>0 ? w.min : Math.round((w.km||0)*PACE[w.al||"n"]);
 const walkKm = w => w.km>0 ? w.km : 0;
@@ -518,7 +527,7 @@ function syncMarche(x){ x.marche = (x.marches||[]).reduce((t,w)=>t+walkMin(w),0)
 function hasJournal(x){ return !!(x && x.j && Object.values(x.j).some(a => a && a.length)); }
 function hasData(x){
   if(!x) return false;
-  if(x.marche||x.piscine||x.autre||x.avocat||x.eauNiv||x.eauMl||(x.boissons&&x.boissons.length)||(x.med&&x.med.length)||(x.marches&&x.marches.length)) return true;
+  if(x.marche||x.piscine||x.autre||(x.sports&&x.sports.length)||x.avocat||x.eauNiv||x.eauMl||(x.boissons&&x.boissons.length)||(x.med&&x.med.length)||(x.marches&&x.marches.length)) return true;
   if((x.repas||[]).some(Boolean)) return true;
   if(hasJournal(x)) return true;
   return [x.p,x.m,x.n].some(o => o && Object.values(o).some(Boolean));
@@ -560,9 +569,9 @@ function totals(x, meal){
 function contributions(x){
   // renvoie une liste {cle, libellé, effets}
   const out = [];
-  const w = (x.marches||[]).reduce((t,m)=>t+walkMin(m)*INTENS[m.al||"n"],0) + x.piscine*1.3 + x.autre;
+  const w = (x.marches||[]).reduce((t,m)=>t+walkMin(m)*INTENS[m.al||"n"],0) + x.piscine*1.3 + x.autre + sportEff(x);
   const f = Math.min(w, 60)/60;
-  if(w>0) out.push({k:"activite", l:"Activité physique ("+Math.round((x.marches||[]).reduce((t,m)=>t+walkMin(m),0)+x.piscine+x.autre)+" min)", e:{sucre:30*f, chol:12*f, reins:12*f}});
+  if(w>0) out.push({k:"activite", l:"Activité physique ("+Math.round((x.marches||[]).reduce((t,m)=>t+walkMin(m),0)+x.piscine+x.autre+sportMin(x))+" min)", e:{sucre:30*f, chol:12*f, reins:12*f}});
   const nr = (x.repas||[]).filter(Boolean).length;
   if(nr) out.push({k:"repas", l:"Marche après les repas", e:{sucre:4*nr}});
   const ml = eauMl(x);
@@ -630,16 +639,7 @@ function render(){
   document.querySelectorAll("nav button, #menu button").forEach(b => b.classList.toggle("on", b.dataset.t===tab));
   menuBtn.classList.toggle("on", tab==="analyses" || tab==="reglages");
   ({jour:rJour, repas:rRepas, bilan:rBilan, analyses:rAnalyses, reglages:rReglages})[tab]();
-  placeNav();
 }
-/* Onglets : juste sous la carte de la date (ou en haut de la page s'il n'y en a pas), collés sous l'en-tête au défilement */
-const navEl = document.querySelector("nav"), headerEl = document.querySelector("header");
-function placeNav(){
-  const db = app.querySelector(".datebar");
-  if(db) db.after(navEl); else app.prepend(navEl);
-}
-function setHH(){ document.documentElement.style.setProperty("--hh", (headerEl.offsetHeight + 6) + "px"); }
-setHH(); addEventListener("resize", setHH); addEventListener("orientationchange", () => setTimeout(setHH, 300));
 
 function stepper(path, v, step, unit=""){
   return `<div class="stepper"><button data-step="${path}" data-d="${-step}">−</button><span class="v">${v}${unit}</span><button data-step="${path}" data-d="${step}">+</button></div>`;
@@ -690,7 +690,18 @@ function htmlActivite(x){ return `
     <div class="quick"><span class="muted" style="align-self:center">Sans distance :</span><button data-qw="15">+15 min</button><button data-qw="30">+30 min</button></div>
     <div class="row"><div class="lbl">Piscine</div>${stepper("piscine", x.piscine, 5, " min")}</div>
     <div class="quick"><button data-add="piscine" data-v="30">+30 min</button><button data-add="piscine" data-v="45">+45 min</button></div>
-    <div class="row"><div class="lbl">Autre<small>vélo, jardinage, gym…</small></div>${stepper("autre", x.autre, 5, " min")}</div>
+    <div class="row"><div class="lbl"><b>Autres sports</b><small>${x.sports.length ? sportMin(x)+" min" : "vélo, tennis, gym…"}</small></div></div>
+    ${x.sports.map((e,i)=>`<div class="row"><div class="lbl">${esc((SPORTMAP[e.sp]||SPORTMAP.autre).n)}<small>${e.min} min · ${SINT[e.al||"s"][1].toLowerCase()}</small></div><button class="chip" data-dels="${i}">Suppr.</button></div>`).join("")}
+    ${x.autre ? `<div class="row"><div class="lbl">Autre (ancienne saisie)</div>${stepper("autre", x.autre, 5, " min")}</div>` : ""}
+    <div style="background:var(--bg);border-radius:12px;padding:10px;margin-top:8px">
+      <select id="ssp" style="width:100%;padding:10px;font:inherit;font-size:17px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)">${SPORTS.map(([id,n])=>`<option value="${id}" ${SD.sp===id?"selected":""}>${n}</option>`).join("")}</select>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <label style="flex:1;font-size:14px;color:var(--muted)">Durée (min)<input id="smin" type="text" inputmode="numeric" placeholder="ex. 20" value="${esc(SD.min)}" style="width:100%;padding:9px;font-size:17px;border:1px solid var(--line);border-radius:8px;margin-top:3px"></label>
+      </div>
+      <div class="chips" style="margin-top:8px">${Object.entries(SINT).map(([k,[c,l]])=>`<button class="chip ${SD.al===k?"on":""}" data-sal="${k}">${l}</button>`).join("")}</div>
+      <p class="muted" style="margin:6px 0 0;font-size:14px">Facile : vous pourriez chanter · Soutenu : vous parlez mais pas chanter · Dur : vous ne pouvez plus parler.</p>
+      <button class="btn" id="sadd" style="margin-top:8px">Ajouter cette activité</button>
+    </div>
     <h3>Marche de 10 min après le repas</h3>
     <div class="chips">${["Matin","Midi","Soir"].map((t,i)=>`<button class="chip ${x.repas[i]?"on":""}" data-repas="${i}">${t}</button>`).join("")}</div>
   </div>`; }
@@ -746,7 +757,7 @@ function htmlQuick(x){ const jr = hasJournal(x); return `
 /* ---------- Tableau de bord : uniquement les résultats ---------- */
 function rJour(){
   const x = day(cur), r = score(x), filled = hasData(D[cur]), t = totals(x), jr = hasJournal(x);
-  const ml = eauMl(x), act = (x.marches||[]).reduce((s,w)=>s+walkMin(w),0) + x.piscine + x.autre;
+  const ml = eauMl(x), act = (x.marches||[]).reduce((s,w)=>s+walkMin(w),0) + x.piscine + x.autre + sportMin(x);
   app.innerHTML = `
   ${dateBar()}
   <div class="card">
@@ -1021,6 +1032,12 @@ function bindDay(root){
   root.querySelectorAll("[data-eaud]").forEach(b => b.onclick = () => setEau(eauMl(day(cur)) + +b.dataset.eaud));
   root.querySelectorAll("[data-qw]").forEach(b => b.onclick = () => edit(x => { x.marches.push({min:+b.dataset.qw, al:"n"}); }));
   root.querySelectorAll("[data-delw]").forEach(b => b.onclick = () => edit(x => { x.marches.splice(+b.dataset.delw,1); }));
+  root.querySelectorAll("[data-dels]").forEach(b => b.onclick = () => edit(x => { x.sports.splice(+b.dataset.dels,1); }));
+  if($("ssp")) $("ssp").onchange = e => { SD.sp = e.target.value; };
+  if($("smin")) $("smin").oninput = e => { SD.min = e.target.value; };
+  root.querySelectorAll("[data-sal]").forEach(b => b.onclick = () => { SD.al = b.dataset.sal; root.querySelectorAll("[data-sal]").forEach(c=>c.classList.toggle("on", c===b)); });
+  if($("sadd")) $("sadd").onclick = () => { const m = parseInt(String(SD.min).replace(",",".")); if(!(m>0 && m<=600)){ alert("Indiquez la durée en minutes."); return; }
+    const e = {sp:SD.sp, min:m, al:SD.al}; SD.min = ""; edit(x => { x.sports = x.sports||[]; x.sports.push(e); }); };
   root.querySelectorAll("[data-avo]").forEach(b => b.onclick = () => edit(x => { x.avocat = Number(b.dataset.avo); }));
 }
 
@@ -1245,6 +1262,7 @@ function rRepas(){
   }).join("");
   const km = (x.marches||[]).reduce((t,w)=>t+walkKm(w),0), mn = (x.marches||[]).reduce((t,w)=>t+walkMin(w),0);
   const actTxt = [mn ? "Marche "+(km?fmt(km,1)+" km · ":"")+mn+" min" : "", x.piscine ? "Piscine "+x.piscine+" min" : "", x.autre ? "Autre "+x.autre+" min" : "",
+                  ...(x.sports||[]).map(e => (SPORTMAP[e.sp]||SPORTMAP.autre).n.replace(/^\S+\s/,"")+" "+e.min+" min"),
                   x.repas.some(Boolean) ? "Après repas : "+["matin","midi","soir"].filter((_,i)=>x.repas[i]).join(", ") : ""].filter(Boolean);
   const ml = eauMl(x);
   const meds = {}; (x.med||[]).forEach(m => { const nm = m.id==="autre" && m.txt ? m.txt : (MEDMAP[m.id]||MEDMAP.autre).l.replace(/ \(.*\)$/,""); meds[nm] = (meds[nm]||0)+1; });
