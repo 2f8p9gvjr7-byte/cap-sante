@@ -1285,6 +1285,46 @@ function openNutri(k){
 const BULLES2 = {act:{ico:"🚶", nom:"Activité", g:"linear-gradient(160deg,#8a6cf0,#b9a3f8)"},
                  eau:{ico:"🥤", nom:"Boissons", g:"linear-gradient(160deg,#1fb8dc,#71dcef)"},
                  med:{ico:"💊", nom:"Médicaments", g:"linear-gradient(160deg,#e0609f,#f29cc6)"}};
+/* ---------- Bas de la page Saisie : mini-scores, petit pas, raccourcis ---------- */
+function miniScores(x){
+  if(!hasData(D[cur])) return "";
+  const r = score(x);
+  return `<button class="card" data-goto="jour" style="display:flex;justify-content:space-around;align-items:center;width:100%;border:1px solid var(--line);color:var(--ink);font:inherit;padding:10px 6px">
+    ${Object.keys(AXES).map(a => { const n = enCours(x,a,r[a]) || niveau(r[a]);
+      return `<span style="display:flex;flex-direction:column;align-items:center;gap:2px"><span style="display:block;width:62px;height:62px">${ring(r[a], n.c).replace('width="84" height="84"','width="62" height="62"')}</span><small class="muted">${AXES[a].nom}</small></span>`; }).join("")}
+  </button>`;
+}
+function petitPas(x){
+  const n = new Date(), h = n.getHours() + n.getMinutes()/60, auj = cur===today();
+  const t = totals(x), act = (x.marches||[]).reduce((s,w)=>s+walkMin(w),0) + x.piscine + x.autre + sportMin(x);
+  const a = (ico, txt) => `<div class="card" style="display:flex;gap:12px;align-items:center;border:1px solid var(--teal)"><span style="font-size:30px">${ico}</span><span style="flex:1;font-size:17px;line-height:1.4">${txt}</span></div>`;
+  if(!hasData(D[cur])) return a("👋", auj ? "Commencez par noter votre <b>petit-déjeuner</b> : touchez <b>Repas</b>." : "Rien de noté ce jour-là.");
+  if(!auj) return "";
+  // eau : rappel selon l’heure (rythme attendu entre le début et la fin des rappels)
+  const ml = eauMl(x), [fh,fm] = (S.bFrom||"08:00").split(":").map(Number), [th,tm] = (S.bTo||"21:00").split(":").map(Number);
+  const frac = Math.max(0, Math.min(1, (h - (fh+fm/60)) / Math.max(1, (th+tm/60) - (fh+fm/60))));
+  const attendu = Math.round(S.eau*frac/50)*50;
+  if(ml < S.eau && attendu - ml >= 250) return a("💧", `Pensez à boire : environ <b>${fmt(attendu,0)} ml</b> à cette heure pour rester dans le rythme (vous en êtes à ${fmt(ml,0)}).`);
+  // marche après le repas
+  const mangé = m => (x.j[m]||[]).some(it => FOODS[it.f]);
+  if(mangé("din") && !x.repas[2] && h >= 19.5) return a("🚶", "Une marche de <b>10 minutes après le dîner</b> fait baisser le pic de sucre. Une fois faite, touchez le bouton ci-dessous.");
+  if(mangé("dej") && !x.repas[1] && h >= 13 && h < 17) return a("🚶", "Une marche de <b>10 minutes après le déjeuner</b> fait baisser le pic de sucre.");
+  if(t.ags >= LIM.ags*0.8 && t.ags < LIM.ags) return a("🧈", `Graisses saturées presque au maximum (${fmt(t.ags,0)} / ${LIM.ags} g) : pour la suite, fruits, légumes, poisson ou yaourt nature.`);
+  if(t.ags >= LIM.ags) return a("🧈", "Graisses saturées dépassées aujourd’hui : rien de grave sur un jour, misez sur fruits et légumes pour la suite.");
+  if(t.fib < 25 && h >= 12){ const m = Math.round(25 - t.fib); return a("🍏", `Il manque <b>${m} g de fibres</b> : ${m<=4?"une pomme":m<=8?"une pomme et une poignée de noix":"des crudités ou des lentilles et un fruit"} suffi${m<=4?"t":"sent"}.`); }
+  if(act < 30 && h >= 15) return a("🚶", `Encore <b>${30-act} minutes</b> de marche ou de vélo pour une belle journée.`);
+  return a("🌟", "Belle journée : vous êtes sur la bonne voie, continuez comme ça !");
+}
+function raccourcis(x){
+  if(cur!==today() && !hasData(D[cur])) return "";
+  const pdjHier = !(x.j.pdj||[]).length && lastMeal("pdj");
+  const n = new Date().getHours(), iRep = n < 11 ? 0 : n < 18 ? 1 : 2;
+  return `<div class="quick" style="justify-content:center;flex-wrap:wrap;margin-top:4px">
+    <button data-qwalk="15">🚶 +15 min de marche</button>
+    ${pdjHier ? `<button data-copym="pdj">☀️ Petit-déj. comme hier</button>` : ""}
+    ${!x.repas[iRep] ? `<button data-qrep="${iRep}">🍽️ Marche après le ${["petit-déj.","déjeuner","dîner"][iRep]} faite</button>` : ""}
+  </div>`;
+}
 function rRepas(){
   const x = day(cur);
   const rond = (k, b, contenu, vide) => `<button class="mrow" data-${k.startsWith("m:")?"meal":"sec"}="${k.replace(/^m:/,"")}">
@@ -1317,7 +1357,6 @@ function rRepas(){
   </details>`;
   app.innerHTML = `
   ${dateBar()}
-  ${rappelBoire()}
   ${pli("r","🍽️ Repas", resRepas, `<div class="repasfond">${repas}</div>
     <button class="add" data-sec="quick" style="background:var(--card2);margin-top:8px">⚡ Pas le temps de détailler ? Liste rapide</button>`)}
   ${pli("q","☀️ Au quotidien", resQuot, `
@@ -1325,7 +1364,14 @@ function rRepas(){
     ${rond("act", BULLES2.act, actTxt.length ? actTxt.map(t=>`<span>${esc(t)}</span>`).join("") : "", "Rien de noté · touchez pour ajouter une marche")}
     ${rond("eau", BULLES2.eau, ml ? `<span>${fmt(ml,0)} / ${fmt(S.eau,0)} ml</span><span class="k" style="color:${ml>=S.eau?"var(--good)":"var(--warn)"}">${Math.round(ml/S.eau*100)} % de l’objectif</span>` : "", "Pas encore notée")}
     ${rond("med", BULLES2.med, medTxt.length ? `<span>${esc(medTxt.join(", "))}</span>` : "", "Rien de noté")}
-  </div>`)}`;
+  </div>`)}
+  ${miniScores(x)}
+  ${petitPas(x)}
+  ${raccourcis(x)}`;
+  app.querySelectorAll("[data-goto]").forEach(b => b.onclick = () => { tab = b.dataset.goto; render(); window.scrollTo(0,0); });
+  app.querySelectorAll("[data-qwalk]").forEach(b => b.onclick = () => edit(y => { y.marches.push({min:+b.dataset.qwalk, al:"n"}); }));
+  app.querySelectorAll("[data-qrep]").forEach(b => b.onclick = () => edit(y => { const i = +b.dataset.qrep; y.repas = y.repas.slice(); y.repas[i] = true; }));
+  app.querySelectorAll("[data-copym]").forEach(b => b.onclick = () => { const lm = lastMeal("pdj"); if(lm){ editJ(y => { y.j.pdj = JSON.parse(JSON.stringify(lm.items)); }); render(); } });
   app.querySelectorAll("details[data-sai]").forEach(d => d.addEventListener("toggle", () => {
     S.saio = Object.assign({}, S.saio, {[d.dataset.sai]: d.open}); save();
     d.querySelector(".chev").textContent = d.open ? "▾" : "›"; }));
@@ -2093,7 +2139,7 @@ function rReglages(){
   ${det("⚠️ Effacer toutes les données", `
     <p class="muted" style="margin:0 0 8px">Efface tout le journal et les prises de sang de ce téléphone. Faites une sauvegarde avant.</p>
     <button class="btn danger" id="rst">Tout effacer</button>`)}
-  <p class="muted" style="text-align:center">Version 72</p>`;
+  <p class="muted" style="text-align:center">Version 73</p>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
