@@ -66,6 +66,7 @@ nav button.on{background:var(--teal-l);color:var(--teal);font-weight:700;box-sha
 .verdict.bad{background:var(--bad-l);color:var(--bad)}
 .verdict.flat{background:var(--warn-l);color:var(--warn)}
 .verdict .ic{font-size:24px;line-height:1}
+details.actrub summary::-webkit-details-marker{display:none}
 .bgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .bbtn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);font:inherit;font-size:15px}
 .bbtn small{color:var(--muted);font-size:12px}
@@ -683,10 +684,21 @@ function bindDateBar(){
   document.getElementById("prev").onclick = () => { cur = addDays(cur,-1); render(); };
   document.getElementById("next").onclick = () => { if(cur<today()){ cur = addDays(cur,1); render(); } };
 }
-function htmlActivite(x){ return `
-  <div class="card">
-    <h2>🚶 Activité</h2>
-    <div class="row"><div class="lbl"><b>Marche</b><small>${x.marches.length?x.marches.length+" marche"+(x.marches.length>1?"s":"")+" · "+(x.marches.some(walkKm)?fmt(x.marches.reduce((t,w)=>t+walkKm(w),0),1)+" km · ":"")+x.marche+" min":"aucune pour l’instant"}</small></div></div>
+let ACTO = "";   // rubrique ouverte dans l’écran Activité
+function htmlActivite(x){
+  const mn = (x.marches||[]).reduce((t,w)=>t+walkMin(w),0), km = (x.marches||[]).reduce((t,w)=>t+walkKm(w),0);
+  const nbR = x.repas.filter(Boolean).length;
+  const rub = (id, ico, titre, resume, contenu) => `
+    <details class="card actrub" data-acto="${id}" ${ACTO===id?"open":""}>
+      <summary style="display:flex;align-items:center;gap:12px;cursor:pointer;list-style:none">
+        <span style="font-size:28px">${ico}</span>
+        <span style="flex:1"><b style="font-size:19px">${titre}</b><br><small class="muted">${resume}</small></span>
+        <span class="muted" style="font-size:20px">${ACTO===id?"▾":"›"}</span>
+      </summary>
+      <div style="margin-top:10px">${contenu}</div>
+    </details>`;
+  return `
+  ${rub("marche","🚶","Marche", mn ? (km?fmt(km,1)+" km · ":"")+mn+" min" : "aucune pour l’instant", `
     ${x.marches.map((w,i)=>`<div class="row"><div class="lbl">${w.km>0?fmt(w.km,1)+" km · ":""}${walkMin(w)} min${w.min>0?"":" (estimé)"}<small>allure ${ALLURE[w.al||"n"]}</small></div><button class="chip" data-delw="${i}">Suppr.</button></div>`).join("")}
     <div style="background:var(--bg);border-radius:12px;padding:10px;margin-top:8px">
       <div style="display:flex;gap:8px">
@@ -697,24 +709,27 @@ function htmlActivite(x){ return `
       <p class="muted" id="wprev" style="margin:6px 0 0"></p>
       <button class="btn" id="wadd" style="margin-top:8px">Ajouter cette marche</button>
     </div>
-    <div class="quick"><span class="muted" style="align-self:center">Sans distance :</span><button data-qw="15">+15 min</button><button data-qw="30">+30 min</button></div>
-    <div class="row"><div class="lbl">Piscine</div>${stepper("piscine", x.piscine, 5, " min")}</div>
-    <div class="quick"><button data-add="piscine" data-v="30">+30 min</button><button data-add="piscine" data-v="45">+45 min</button></div>
-    <div class="row"><div class="lbl"><b>Autres sports</b><small>${x.sports.length ? sportMin(x)+" min" : "vélo, tennis, gym…"}</small></div></div>
+    <div class="quick"><span class="muted" style="align-self:center">Sans distance :</span><button data-qw="15">+15 min</button><button data-qw="30">+30 min</button></div>`)}
+  ${rub("piscine","🏊","Piscine", x.piscine ? x.piscine+" min" : "aucune pour l’instant", `
+    <div class="row"><div class="lbl">Durée</div>${stepper("piscine", x.piscine, 5, " min")}</div>
+    <div class="quick"><button data-add="piscine" data-v="30">+30 min</button><button data-add="piscine" data-v="45">+45 min</button></div>`)}
+  ${rub("sports","🚴","Autres sports", x.sports.length||x.autre ? (sportMin(x)+x.autre)+" min · "+x.sports.map(e=>(SPORTMAP[e.sp]||SPORTMAP.autre).n.replace(/^\S+\s/,"")).join(", ") : "vélo, tennis, gym…", `
     ${x.sports.map((e,i)=>`<div class="row"><div class="lbl">${esc((SPORTMAP[e.sp]||SPORTMAP.autre).n)}<small>${e.min} min · ${SINT[e.al||"s"][1].toLowerCase()}</small></div><button class="chip" data-dels="${i}">Suppr.</button></div>`).join("")}
     ${x.autre ? `<div class="row"><div class="lbl">Autre (ancienne saisie)</div>${stepper("autre", x.autre, 5, " min")}</div>` : ""}
+    <p class="muted" style="margin:6px 0 4px">1. Choisissez le sport</p>
     <div style="background:var(--bg);border-radius:12px;padding:10px;margin-top:8px">
       <select id="ssp" style="width:100%;padding:10px;font:inherit;font-size:17px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)">${SPORTS.map(([id,n])=>`<option value="${id}" ${SD.sp===id?"selected":""}>${n}</option>`).join("")}</select>
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-        <label style="flex:1;font-size:14px;color:var(--muted)">Durée (min)<input id="smin" type="text" inputmode="numeric" placeholder="ex. 20" value="${esc(SD.min)}" style="width:100%;padding:9px;font-size:17px;border:1px solid var(--line);border-radius:8px;margin-top:3px"></label>
+        <label style="flex:1;font-size:14px;color:var(--muted)">2. Durée (min)<input id="smin" type="text" inputmode="numeric" placeholder="ex. 20" value="${esc(SD.min)}" style="width:100%;padding:9px;font-size:17px;border:1px solid var(--line);border-radius:8px;margin-top:3px"></label>
       </div>
-      <div class="chips" style="margin-top:8px">${Object.entries(SINT).map(([k,[c,l]])=>`<button class="chip ${SD.al===k?"on":""}" data-sal="${k}">${l}</button>`).join("")}</div>
+      <p class="muted" style="margin:8px 0 0;font-size:14px">3. Difficulté</p><div class="chips" style="margin-top:4px">${Object.entries(SINT).map(([k,[c,l]])=>`<button class="chip ${SD.al===k?"on":""}" data-sal="${k}">${l}</button>`).join("")}</div>
       <p class="muted" style="margin:6px 0 0;font-size:14px">Facile : vous pourriez chanter · Soutenu : vous parlez mais pas chanter · Dur : vous ne pouvez plus parler.</p>
       <button class="btn" id="sadd" style="margin-top:8px">Ajouter cette activité</button>
-    </div>
-    <h3>Marche de 10 min après le repas</h3>
-    <div class="chips">${["Matin","Midi","Soir"].map((t,i)=>`<button class="chip ${x.repas[i]?"on":""}" data-repas="${i}">${t}</button>`).join("")}</div>
-  </div>`; }
+    </div>`)}
+  ${rub("repas","🍽️","Marche après le repas", nbR ? ["matin","midi","soir"].filter((_,i)=>x.repas[i]).join(", ") : "10 min après un repas : touchez le repas concerné", `
+    <p class="muted" style="margin:0 0 6px">Une petite marche de 10 minutes après le repas fait baisser le pic de sucre.</p>
+    <div class="chips">${["Matin","Midi","Soir"].map((t,i)=>`<button class="chip ${x.repas[i]?"on":""}" data-repas="${i}">${t}</button>`).join("")}</div>`)}`;
+}
 function htmlEau(x){ return `
   <div class="card">
     <h2>💧 Eau</h2>
@@ -981,6 +996,7 @@ const SECTIONS = {
   quick:{titre:"⚡ Liste rapide", html:htmlQuick}
 };
 function openSection(k){
+  if(k==="act" && !(ovRefresh && ovRefresh.k===k)) ACTO = "";   // la liste des rubriques s’ouvre fermée (mais reste ouverte après un ajout)
   const x = day(cur), sec = SECTIONS[k], y = ov.querySelector(".body") ? ov.querySelector(".body").scrollTop : 0;
   document.body.style.overflow = "hidden";
   ov.innerHTML = `<div class="top"><button id="ovx">‹ Saisie</button><b style="flex:1;text-align:center">${sec.titre}</b><span style="width:60px"></span></div>
@@ -1042,6 +1058,11 @@ function bindDay(root){
   root.querySelectorAll("[data-eaud]").forEach(b => b.onclick = () => setEau(eauMl(day(cur)) + +b.dataset.eaud));
   root.querySelectorAll("[data-qw]").forEach(b => b.onclick = () => edit(x => { x.marches.push({min:+b.dataset.qw, al:"n"}); }));
   root.querySelectorAll("[data-delw]").forEach(b => b.onclick = () => edit(x => { x.marches.splice(+b.dataset.delw,1); }));
+  root.querySelectorAll("details[data-acto]").forEach(d => d.addEventListener("toggle", () => {
+    if(d.open){ ACTO = d.dataset.acto; root.querySelectorAll("details[data-acto]").forEach(o => { if(o!==d) o.open = false; });
+      root.querySelectorAll("details[data-acto] summary span:last-child").forEach(sp => sp.textContent = sp.closest("details").open ? "▾" : "›"); }
+    else { if(ACTO===d.dataset.acto) ACTO = ""; d.querySelector("summary span:last-child").textContent = "›"; }
+  }));
   root.querySelectorAll("[data-dels]").forEach(b => b.onclick = () => edit(x => { x.sports.splice(+b.dataset.dels,1); }));
   if($("ssp")) $("ssp").onchange = e => { SD.sp = e.target.value; };
   if($("smin")) $("smin").oninput = e => { SD.min = e.target.value; };
@@ -2054,7 +2075,7 @@ function rReglages(){
   ${det("⚠️ Effacer toutes les données", `
     <p class="muted" style="margin:0 0 8px">Efface tout le journal et les prises de sang de ce téléphone. Faites une sauvegarde avant.</p>
     <button class="btn danger" id="rst">Tout effacer</button>`)}
-  <p class="muted" style="text-align:center">Version 70</p>`;
+  <p class="muted" style="text-align:center">Version 71</p>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
