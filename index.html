@@ -2089,7 +2089,7 @@ function cartePoids(){
         <div style="text-align:right">${ecart(7)}${ecart(30)}</div></div>
       ${courbePoids()}` : `<p class="muted" style="margin:0">Aucune pesée pour l’instant. Notez votre poids ci-dessous après une pesée.</p>`}
     <label class="f" style="margin-top:12px">Date <input type="date" id="pDate" value="${today()}" max="${today()}"></label>
-    <label class="f">Poids (kg) <input id="pKg" type="text" inputmode="decimal" placeholder="71,1" style="width:110px;font-size:20px;font-weight:700;text-align:center"></label>
+    <label class="f">Poids (kg) <input id="pKg" type="text" inputmode="decimal" placeholder="ex. 71,1" style="width:120px;font-size:20px;font-weight:700;text-align:center"></label>
     <button class="btn" id="pOk">Enregistrer</button>
     ${poidsMsg ? `<p style="margin:10px 0 0;font-weight:600">${poidsMsg}</p>` : ""}
     ${jours.length ? `<h3 style="margin:14px 0 4px;font-size:15px">Dernières pesées</h3>
@@ -2121,6 +2121,7 @@ function rAnalyses(){
   const sorted = L.slice().sort((a,b)=>a.date<b.date?-1:1);
   const last = sorted[sorted.length-1];
   const next = last ? addDays(last.date, 90) : null;
+  let nbAlerte = 0;
   const rows = LABS.map(m => {
     const vals = sorted.filter(e => e[m.id]!=null && e[m.id]!=="");
     if(!vals.length) return "";
@@ -2128,14 +2129,25 @@ function rAnalyses(){
     const c = m.cible();
     let ok = "";
     if(c!=null) ok = (m.bas ? v < c : v > c) ? "✅" : "⚠️";
+    if(ok==="⚠️") nbAlerte++;
     let tr = "";
     if(p!=null){ const ecart = Math.abs(v-p)/Math.abs(p||1); const better = m.bas ? v<p : v>p;
       tr = ecart < 0.06 ? `<span class="muted" style="font-weight:700">stable</span>` : `<span class="${better?"up":"down"}">${better?"mieux":"moins bien"}</span>`; }
     return `<tr><td>${m.l}<div class="muted">${p!=null?fmt(p)+" → ":""}<b>${fmt(v)}</b> ${m.u}</div></td><td>${m.ct()} ${ok}</td><td>${tr}</td></tr>`;
   }).join("");
-  app.innerHTML = cartePoids() + `
+  // deux rubriques repliables, comme la Saisie
+  const P = S.pesees || {}, pj = Object.keys(P).sort(), pder = pj[pj.length-1];
+  const pref = pder ? pj.filter(d => d <= addDays(pder,-30)).pop() : null;
+  const resPoids = pder ? `<b>${kg1(P[pder].kg)} kg</b> le ${fmtShort(pder)}` + (pref ? ` · ${(() => { const dv = P[pder].kg-P[pref].kg; return Math.abs(dv)<0.25 ? "stable sur 30 jours" : (dv>0?"+":"−")+fmt(Math.abs(dv),1)+" kg en 30 jours"; })()}` : "") : "Aucune pesée · touchez pour noter votre poids";
+  const resAna = last ? `Dernière prise de sang le ${fmtShort(last.date)} · ${nbAlerte ? nbAlerte+" à surveiller ⚠️" : "tout dans les objectifs ✅"}` : "Aucun résultat · touchez pour ajouter";
+  const sa = S.saio || {};
+  const pli = (id, titre, resume, contenu) => `
+  <details class="saipli" data-sai="${id}" ${sa[id]?"open":""}>
+    <summary><span style="flex:1"><b style="font-size:21px">${titre}</b><br><small class="muted" style="font-size:15px;line-height:1.5">${resume}</small></span><span class="chev">${sa[id]?"▾":"›"}</span></summary>
+    ${contenu}
+  </details>`;
+  app.innerHTML = pli("poids","⚖️ Mon poids", resPoids, cartePoids().replace(/<h2>⚖️ Mon poids<\/h2>/,"")) + pli("ana","🩸 Mes analyses", resAna, `
   <div class="card">
-    <h2>🩸 Mes résultats</h2>
     ${rows ? `<table><tr><th>Marqueur</th><th>Objectif</th><th>Évolution</th></tr>${rows}</table>
       <p class="muted">Dernier bilan : ${fmtShort(last.date)}. Prochain bilan conseillé vers le <b>${fmtShort(next)}</b> (environ 3 mois), sur prescription du médecin. « Stable » = écart de moins de 6 %, dans la marge normale d’une prise de sang à l’autre.</p>`
     : `<p class="muted">Aucun résultat enregistré. Touchez « Ajouter une prise de sang » et recopiez les chiffres de votre dernier bilan.</p>`}
@@ -2150,7 +2162,10 @@ function rAnalyses(){
   </div>` : ""}
   ${sorted.length ? `<div class="card"><h2>Historique</h2>
     ${sorted.slice().reverse().map((e,i)=>`<div class="row"><div class="lbl"><b>${fmtShort(e.date)}</b><small>${LABS.filter(m=>e[m.id]!=null&&e[m.id]!=="").map(m=>m.l.split(" ")[0]+" "+fmt(e[m.id])).join(" · ")}</small></div><button class="chip" data-del="${esc(e.date)}">Suppr.</button></div>`).join("")}
-  </div>` : ""}`;
+  </div>` : ""}`);
+  app.querySelectorAll("details[data-sai]").forEach(d => d.addEventListener("toggle", () => {
+    S.saio = Object.assign({}, S.saio, {[d.dataset.sai]: d.open}); save();
+    d.querySelector(".chev").textContent = d.open ? "▾" : "›"; }));
   brancherPoids();
   document.getElementById("addLab").onclick = () => { labForm = !labForm; render(); };
   if(labForm) document.getElementById("saveLab").onclick = () => {
@@ -2202,7 +2217,7 @@ function rReglages(){
   ${det("⚠️ Effacer toutes les données", `
     <p class="muted" style="margin:0 0 8px">Efface tout le journal et les prises de sang de ce téléphone. Faites une sauvegarde avant.</p>
     <button class="btn danger" id="rst">Tout effacer</button>`)}
-  <p class="muted" style="text-align:center">Version 74</p>`;
+  <p class="muted" style="text-align:center">Version 75</p>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
