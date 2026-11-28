@@ -1529,6 +1529,9 @@ function lireEtiquette(txt){
     .replace(/^(\s*[a-z][^\d\n]*)?(\d+(?:\.\d+)?) 9[ \t]*$/gm, (m,a,v) => (a||"")+v+" g")
     .replace(/^\s*0 ?9\s*$/gm, "0 g");
   const res = {};
+  // retirer les lignes hors tableau : oméga-3 annoncés, adresse du fabricant, conservation
+  // (seulement à partir du mot repéré : une ligne du tableau peut être suivie d'un autre texte sur la même ligne)
+  t = t.replace(/omega[^\n]*/g," ").replace(/(\brue\b|www\.|salaries|conserverie|a consommer|a conserver|\b\d{5}\b)[^\n]*/g," ");
   // retirer la liste des ingrédients (« sucre », « sel », « matière grasse »… y apparaissent aussi)
   // (si le tableau suit la liste, on l'enlève jusqu'au tableau ; sinon seulement jusqu'à la fin de la ligne)
   t = t.replace(/ingredients?\b[\s\S]*?(?=energie|valeurs? nutritionnelles|informations? nutritionnelles|declaration nutritionnelle|\bkcal|\bkj)/g, " ")
@@ -1542,7 +1545,7 @@ function lireEtiquette(txt){
   const kc = [...t.matchAll(/(\d+(?:\.\d+)?)\s*k\s*c\s*a\s*l/g)].map(m=>+m[1]);
   if(kc.length) { res.kcal = kc[0]; if(kc[1]) res.kcalP = kc[1]; }
   else { const kj = [...t.matchAll(/(\d+(?:\.\d+)?)\s*k\s*j/g)].map(m=>+m[1]); if(kj.length) res.kcal = Math.round(kj[0]/4.184); }
-  const KEYS = [["ags",/(acides?\s+gras\s+satur\w*|satures?|saturated)/],["lip",/(matieres?\s+grasses?|lipides|graisses)/],["suc",/(dont\s+sucres?|sucres?|sugars?)/],
+  const KEYS = [["ags",/(acides?\s+gras\s+satur\w*|satures?|saturated)/],["lip",/(matieres?\s+grasses?|matieres?\b|lipides|graisses)/],["suc",/(dont\s+sucres?|sucres?|sugars?)/],
                 ["gluc",/(glucides|carbohydrate)/],["fib",/(fibres?)/],["prot",/(proteines?|protein)/],["sel",/(\bsel\b|\bsalt\b)/]];
   // positions des mots-clés
   const pos = [];
@@ -1561,8 +1564,8 @@ function lireEtiquette(txt){
     }
     if(prem) pos.push(prem); });
   pos.sort((a,b)=>a.i-b.i);
-  const nums = s => [...s.replace(/\d+(?:\.\d+)?\s*k\s*j/g," ").replace(/\d+(?:\.\d+)?\s*k\s*c\s*a\s*l/g," ").replace(/\d+\s*%/g," ").matchAll(/(\d+(?:\.\d+)?)\s*(m?g)?/g)]
-     .map(m => ({v:+m[1], g:!!m[2], raw:m[0]}));
+  const nums = s => [...s.replace(/\d+(?:\.\d+)?\s*k\s*j/g," ").replace(/\d+(?:\.\d+)?\s*k\s*c\s*a\s*l/g," ").replace(/\d+\s*%/g," ").matchAll(/(<\s*)?(\d+(?:\.\d+)?)\s*(m?g)?/g)]
+     .map(m => ({v: m[1] && +m[2] <= 1 ? 0 : +m[2], g:!!m[3], raw:m[0]}));
   let trouve = 0;
   const seg = pos.map((p,i) => {
     let fin;
@@ -1578,7 +1581,20 @@ function lireEtiquette(txt){
   const longs = seg.map(x => x.length).filter(l => l>0), cpt = {};
   longs.forEach(l => cpt[l] = (cpt[l]||0)+1);
   const k = +(Object.entries(cpt).sort((a,b) => b[1]-a[1] || a[0]-b[0])[0]||[1])[0] || 1;
-  seg.forEach((n,i) => { if(!n.length && seg[i+1] && seg[i+1].length>=2*k) seg[i] = seg[i+1].splice(0, k); });
+  // libellés en grille : une suite de libellés sans chiffre, puis tous leurs chiffres à la suite
+  // (« Glucides  dont sucres  Protéines  Sel » puis « <0,5 g  <0,5 g  28 g  1,1 g »)
+  const lignesChiffres = from => { const out = [];
+    for(const l of t.slice(from).split("\n").slice(1)){ if(!l.trim()) continue; if(/^\s*[<≈~]?\s*\d[\d.]*\s*(m?g|0)?\s*%?\s*$/.test(l)) out.push(...nums(l)); else break; }
+    return out; };
+  for(let i=0; i<seg.length; i++){
+    if(seg[i].length) continue;
+    let j = i; while(j<seg.length && !seg[j].length) j++;
+    const N = j - i + 1;
+    let dispo = j<seg.length ? seg[j] : [];
+    if(j === seg.length-1 && dispo.length < N*k){ const ext = lignesChiffres(pos[j].end); if(ext.length >= N*k) dispo = ext; }
+    if(j<seg.length && dispo.length >= N*k){ for(let q=0; q<N; q++) seg[i+q] = dispo.slice(q*k, q*k+k); }
+    i = j;
+  }
   pos.forEach((p,i) => { const n = seg[i];
     if(n.length){ res[p.k] = n[0].v; if(n[1]) res[p.k+"P"] = n[1].v; trouve++; }
   });
@@ -2217,7 +2233,7 @@ function rReglages(){
   ${det("⚠️ Effacer toutes les données", `
     <p class="muted" style="margin:0 0 8px">Efface tout le journal et les prises de sang de ce téléphone. Faites une sauvegarde avant.</p>
     <button class="btn danger" id="rst">Tout effacer</button>`)}
-  <p class="muted" style="text-align:center">Version 75</p>`;
+  <p class="muted" style="text-align:center">Version 76</p>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
