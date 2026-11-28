@@ -141,7 +141,7 @@ input::placeholder{color:#6f7da0}
 <body>
 <header><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><h1>Cap Santé</h1><p id="sub">Glycémie · Cholestérol · Reins</p></div>
   <button id="menuBtn" aria-haspopup="true" aria-expanded="false">☰ Plus</button></div>
-  <div id="menu" role="menu"><button data-t="analyses" role="menuitem">🩸 Analyses de sang</button><button data-t="reglages" role="menuitem">⚙️ Réglages et sauvegarde</button></div></header>
+  <div id="menu" role="menu"><button data-t="analyses" role="menuitem">🩸 Analyses et ⚖️ poids</button><button data-t="reglages" role="menuitem">⚙️ Réglages et sauvegarde</button></div></header>
 <main id="app"></main>
 <div id="ov"></div>
 <div id="upd">Nouvelle version disponible <button id="updBtn">Mettre à jour</button></div>
@@ -2054,6 +2054,68 @@ function chart(){
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Scores des 30 derniers jours">${g}</svg>`;
 }
 
+/* ---------- Poids : saisie de temps en temps ---------- */
+const kg1 = v => v.toFixed(1).replace(".", ",");
+function courbePoids(){
+  const P = S.pesees || {}, t = today(), debut = addDays(t, -89);
+  const pts = Object.keys(P).filter(d => d>=debut && d<=t).sort().map(d => ({d, v:P[d].kg}));
+  if(pts.length < 2) return `<p class="muted" style="margin:6px 0 0">La courbe apparaîtra à partir de 2 pesées.</p>`;
+  const W = 340, H = 150, M = {l:34, r:8, t:10, b:22};
+  const vs = pts.map(p=>p.v); let lo = Math.floor(Math.min(...vs)-0.5), hi = Math.ceil(Math.max(...vs)+0.5);
+  if(hi-lo < 2){ hi = lo+2; }
+  const d0 = parse(pts[0].d), span = Math.max(1, (parse(t)-d0)/864e5);
+  const X = d => M.l + ((parse(d)-d0)/864e5)/span*(W-M.l-M.r), Y = v => M.t + (hi-v)/(hi-lo)*(H-M.t-M.b);
+  let g = "";
+  [lo, (lo+hi)/2, hi].forEach(v => g += `<line x1="${M.l}" x2="${W-M.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="#26365f"/><text x="${M.l-5}" y="${Y(v)+4}" font-size="10" text-anchor="end" fill="#9aa8c7">${fmt(v,1)}</text>`);
+  [[pts[0].d,"start"],[t,"end"]].forEach(([s,a]) => g += `<text x="${X(s)}" y="${H-6}" font-size="10" fill="#9aa8c7" text-anchor="${a}">${parse(s).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</text>`);
+  g += `<polyline fill="none" stroke="#f5a623" stroke-width="2" stroke-linejoin="round" points="${pts.map(p=>X(p.d)+","+Y(p.v)).join(" ")}"/>`;
+  pts.forEach(p => g += `<circle cx="${X(p.d)}" cy="${Y(p.v)}" r="2.5" fill="#f5a623"/>`);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Poids des 3 derniers mois">${g}</svg>`;
+}
+let poidsMsg = "", poidsTout = false;
+function cartePoids(){
+  const P = S.pesees || {}, jours = Object.keys(P).sort();
+  const der = jours[jours.length-1];
+  const ecart = n => { if(!der) return ""; const ref = jours.filter(d => d <= addDays(der,-n)).pop();
+    if(!ref || ref < addDays(der, -n-7)) return "";
+    const dv = P[der].kg - P[ref].kg, s = Math.abs(dv) < 0.25 ? `<span class="muted" style="font-weight:700">stable</span>` : `<b style="color:var(--ink)">${dv>0?"+":"−"}${fmt(Math.abs(dv),1)} kg</b>`;
+    return `<div class="muted">${n===7?"en 7 jours":"en 30 jours"} : ${s}</div>`; };
+  const liste = (poidsTout ? jours : jours.slice(-7)).slice().reverse();
+  return `<div class="card">
+    <h2>⚖️ Mon poids</h2>
+    ${der ? `<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px">
+        <div><div style="font-size:30px;font-weight:800">${kg1(P[der].kg)} <span style="font-size:16px;font-weight:600">kg</span></div>
+        <div class="muted">${esc(fmtDate(der))}${P[der].h?" à "+P[der].h:""}</div></div>
+        <div style="text-align:right">${ecart(7)}${ecart(30)}</div></div>
+      ${courbePoids()}` : `<p class="muted" style="margin:0">Aucune pesée pour l’instant. Notez votre poids ci-dessous après une pesée.</p>`}
+    <label class="f" style="margin-top:12px">Date <input type="date" id="pDate" value="${today()}" max="${today()}"></label>
+    <label class="f">Poids (kg) <input id="pKg" type="text" inputmode="decimal" placeholder="71,1" style="width:110px;font-size:20px;font-weight:700;text-align:center"></label>
+    <button class="btn" id="pOk">Enregistrer</button>
+    ${poidsMsg ? `<p style="margin:10px 0 0;font-weight:600">${poidsMsg}</p>` : ""}
+    ${jours.length ? `<h3 style="margin:14px 0 4px;font-size:15px">Dernières pesées</h3>
+      ${liste.map(d => `<div class="row"><div class="lbl">${esc(parse(d).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"}))}<small>${P[d].h||""}</small></div><b>${kg1(P[d].kg)} kg</b><button class="chip" data-pdel="${esc(d)}" style="margin-left:8px">Suppr.</button></div>`).join("")}
+      ${jours.length>7 ? `<button class="chip" id="pTout" style="margin-top:8px">${poidsTout?"Voir moins":"Voir les "+jours.length+" pesées"}</button>` : ""}` : ""}
+  </div>`;
+}
+function brancherPoids(){
+  const $ = id => document.getElementById(id);
+  $("pOk").onclick = () => {
+    const kg = parseFloat($("pKg").value.replace(",", ".")), d = $("pDate").value || today();
+    if(!(kg>=25 && kg<=250)){ poidsMsg = `<span style="color:var(--warn)">Indiquez un poids en kg, par exemple 71,1.</span>`; render(); return; }
+    if(d > today()){ poidsMsg = `<span style="color:var(--warn)">La date ne peut pas être dans le futur.</span>`; render(); return; }
+    const deja = (S.pesees||{})[d];
+    if(deja && deja.kg !== kg && !confirm("Remplacer la pesée du "+fmtShort(d)+" ("+fmt(deja.kg,1)+" kg) par "+fmt(kg,1)+" kg ?")) return;
+    const h = d===today() ? new Date().toTimeString().slice(0,5) : "";
+    S.pesees = S.pesees || {}; S.pesees[d] = {kg:Math.round(kg*10)/10, h}; save();
+    poidsMsg = `<span style="color:var(--good)">✅ ${fmt(kg,1)} kg enregistré${d===today()?"":" pour le "+esc(parse(d).toLocaleDateString("fr-FR",{day:"numeric",month:"long"}))}</span>`;
+    render();
+  };
+  if($("pTout")) $("pTout").onclick = () => { poidsTout = !poidsTout; render(); };
+  app.querySelectorAll("[data-pdel]").forEach(b => b.onclick = () => {
+    if(confirm("Supprimer la pesée du "+fmtShort(b.dataset.pdel)+" ?")){ delete S.pesees[b.dataset.pdel]; save(); render(); }
+  });
+}
+
 let labForm = false;
 function rAnalyses(){
   const sorted = L.slice().sort((a,b)=>a.date<b.date?-1:1);
@@ -2071,7 +2133,7 @@ function rAnalyses(){
       tr = ecart < 0.06 ? `<span class="muted" style="font-weight:700">stable</span>` : `<span class="${better?"up":"down"}">${better?"mieux":"moins bien"}</span>`; }
     return `<tr><td>${m.l}<div class="muted">${p!=null?fmt(p)+" → ":""}<b>${fmt(v)}</b> ${m.u}</div></td><td>${m.ct()} ${ok}</td><td>${tr}</td></tr>`;
   }).join("");
-  app.innerHTML = `
+  app.innerHTML = cartePoids() + `
   <div class="card">
     <h2>🩸 Mes résultats</h2>
     ${rows ? `<table><tr><th>Marqueur</th><th>Objectif</th><th>Évolution</th></tr>${rows}</table>
@@ -2089,6 +2151,7 @@ function rAnalyses(){
   ${sorted.length ? `<div class="card"><h2>Historique</h2>
     ${sorted.slice().reverse().map((e,i)=>`<div class="row"><div class="lbl"><b>${fmtShort(e.date)}</b><small>${LABS.filter(m=>e[m.id]!=null&&e[m.id]!=="").map(m=>m.l.split(" ")[0]+" "+fmt(e[m.id])).join(" · ")}</small></div><button class="chip" data-del="${esc(e.date)}">Suppr.</button></div>`).join("")}
   </div>` : ""}`;
+  brancherPoids();
   document.getElementById("addLab").onclick = () => { labForm = !labForm; render(); };
   if(labForm) document.getElementById("saveLab").onclick = () => {
     const e = {date: document.getElementById("ld").value || today()};
@@ -2139,7 +2202,7 @@ function rReglages(){
   ${det("⚠️ Effacer toutes les données", `
     <p class="muted" style="margin:0 0 8px">Efface tout le journal et les prises de sang de ce téléphone. Faites une sauvegarde avant.</p>
     <button class="btn danger" id="rst">Tout effacer</button>`)}
-  <p class="muted" style="text-align:center">Version 73</p>`;
+  <p class="muted" style="text-align:center">Version 74</p>`;
   document.getElementById("sldl").onchange = e => { S.ldl = +e.target.value; save(); };
   document.getElementById("ssexe").onchange = e => { S.sexe = e.target.value; save(); };
   document.getElementById("sact").onchange = e => { const v = parseInt(e.target.value); if(v>0){ S.actif = v; save(); } };
